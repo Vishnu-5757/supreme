@@ -59,55 +59,56 @@ export default function ProfileScreen({ navigation, route }: any) {
 
         <ScrollView style={s.scrollOuter} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── Horizontal profile card ── */}
+        {/* ── Hero profile card ── */}
         <View style={s.profileCard}>
-          <View style={s.avatarWrap}>
+          <View pointerEvents="none" style={s.cardWatermark} />
+
+          <View style={s.cardTopRow}>
             <View style={s.avatarCircle}>
               <Text style={s.avatarTxt}>{initials}</Text>
             </View>
+            <TouchableOpacity
+              style={s.editIconBtn}
+              onPress={() => navigation.navigate('EditProfile', { user: { ...user, username: localUsername } })}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={15} color={P} />
+            </TouchableOpacity>
           </View>
 
-          <View style={s.profileInfo}>
-            <Text style={s.name} numberOfLines={1}>{displayName || 'User'}</Text>
-            <Text style={s.username}>@{localUsername}</Text>
-            {email ? (
-              <View style={s.infoRow}>
-                <MaterialCommunityIcons name="email-outline" size={13} color="#9CA3AF" />
-                <Text style={s.infoTxt} numberOfLines={1}>{email}</Text>
+          <Text style={s.name} numberOfLines={1}>{displayName || 'User'}</Text>
+          {role ? <Text style={s.roleTxt}>{role}</Text> : null}
+
+          {email ? (
+            <View style={s.infoRow}>
+              <MaterialCommunityIcons name="email-outline" size={13} color="#9CA3AF" />
+              <Text style={s.infoTxt} numberOfLines={1}>{email}</Text>
+            </View>
+          ) : null}
+
+          {branchName ? (
+            <View style={s.chips}>
+              <View style={s.chip}>
+                <MaterialCommunityIcons name="office-building-outline" size={11} color={P} />
+                <Text style={s.chipTxt}>{branchName}</Text>
               </View>
-            ) : null}
-            {(branchName || role) ? (
-              <View style={s.chips}>
-                {branchName ? (
-                  <View style={[s.chip, { backgroundColor: '#FFF5F5', borderColor: '#FECDD3' }]}>
-                    <MaterialCommunityIcons name="office-building-outline" size={11} color={P} />
-                    <Text style={[s.chipTxt, { color: P }]}>{branchName}</Text>
-                  </View>
-                ) : null}
-                {role ? (
-                  <View style={[s.chip, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-                    <MaterialCommunityIcons name="shield-check-outline" size={11} color="#2563EB" />
-                    <Text style={[s.chipTxt, { color: '#2563EB' }]}>{role}</Text>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
         </View>
 
         {/* ── Account ── */}
         <Text style={s.sectionLabel}>ACCOUNT</Text>
         <View style={s.menuCard}>
           <Row
-            icon="account-edit-outline" iconColor={P} iconBg="#FFF5F5"
-            label="Edit Profile"
-            onPress={() => navigation.navigate('EditProfile', { user: { ...user, username: localUsername } })}
+            icon="lock-outline" iconColor="#6B7280" iconBg="#F3F4F6"
+            label="Change Password"
+            onPress={() => navigation.navigate('ChangePassword')}
           />
           <View style={s.sep} />
           <Row
-            icon="lock-outline" iconColor="#2563EB" iconBg="#EFF6FF"
-            label="Change Password"
-            onPress={() => navigation.navigate('ChangePassword')}
+            icon="bell-outline" iconColor="#6B7280" iconBg="#F3F4F6"
+            label="Notifications"
+            onPress={() => navigation.navigate('Notifications')}
           />
         </View>
 
@@ -169,10 +170,7 @@ const s = StyleSheet.create({
   topBar: {
     backgroundColor: P,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18,
-    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
-    elevation: 4,
-    shadowColor: P, shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
   },
   backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
@@ -181,40 +179,48 @@ const s = StyleSheet.create({
   topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub:   { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
 
-  scrollOuter: { flex: 1, backgroundColor: '#F4F5F7', marginTop: -24 },
+  scrollOuter: { flex: 1, backgroundColor: '#F4F5F7', marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   scroll: { paddingTop: 29, paddingHorizontal: 16, paddingBottom: 48 },
 
-  /* horizontal profile card */
+  /* hero profile card — premium "credit card" style */
   profileCard: {
-    backgroundColor: '#FFF', borderRadius: 18,
-    padding: 20, flexDirection: 'row', alignItems: 'center', gap: 16,
+    position: 'relative',
+    backgroundColor: '#FFFFFF', borderRadius: 20,
+    padding: 20,
     marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
-  },
-  avatarWrap: {
-    width: 74, height: 74, borderRadius: 37,
-    backgroundColor: '#FFF5F5',
-    borderWidth: 2, borderColor: '#FECDD3',
-    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(142,28,28,0.08)',
     elevation: 4,
-    shadowColor: P, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
-    flexShrink: 0,
+    shadowColor: '#421313', shadowOpacity: 0.10, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
+  },
+  cardWatermark: {
+    position: 'absolute', top: -30, right: -30,
+    width: 130, height: 130, borderRadius: 65,
+    backgroundColor: 'rgba(142,28,28,0.045)',
+  },
+  cardTopRow: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  editIconBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1, borderColor: '#FECDD3',
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarCircle: {
-    width: 64, height: 64, borderRadius: 32,
+    width: 60, height: 60, borderRadius: 30,
     backgroundColor: P, alignItems: 'center', justifyContent: 'center',
   },
-  avatarTxt:   { fontSize: 24, fontWeight: '800', color: '#FFF' },
+  avatarTxt:   { fontSize: 22, fontWeight: '800', color: '#FFF' },
 
-  profileInfo: { flex: 1 },
   name:        { fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.3, marginBottom: 2 },
-  username:    { fontSize: 13, color: '#9CA3AF', fontWeight: '500', marginBottom: 6 },
-  infoRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
-  infoTxt:     { fontSize: 12, color: '#9CA3AF', fontWeight: '500', flex: 1 },
+  roleTxt:     { fontSize: 12.5, color: '#9CA3AF', fontWeight: '600', marginBottom: 8 },
+  infoRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
+  infoTxt:     { fontSize: 12.5, color: '#6B7280', fontWeight: '500' },
   chips:       { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  chip:        { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
-  chipTxt:     { fontSize: 11, fontWeight: '700' },
+  chip:        { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FECDD3' },
+  chipTxt:     { fontSize: 11, fontWeight: '700', color: P },
 
   /* menu */
   sectionLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1.1, marginBottom: 8 },

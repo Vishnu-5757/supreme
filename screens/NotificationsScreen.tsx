@@ -211,10 +211,7 @@ const styles = StyleSheet.create({
   topBar: {
     backgroundColor: PRIMARY,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18,
-    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
-    elevation: 4,
-    shadowColor: PRIMARY, shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
   },
   backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
@@ -222,8 +219,8 @@ const styles = StyleSheet.create({
   topTitle:     { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub:       { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
 
-  skeletonWrap: { flex: 1, backgroundColor: '#F5F6F8', marginTop: -24, paddingTop: 29, paddingHorizontal: 14 },
-  list:         { flex: 1, marginTop: -24, backgroundColor: '#F5F6F8' },
+  skeletonWrap: { flex: 1, backgroundColor: '#F5F6F8', marginTop: -24, paddingTop: 29, paddingHorizontal: 14, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  list:         { flex: 1, marginTop: -24, backgroundColor: '#F5F6F8', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   listContent:  { paddingTop: 29, paddingHorizontal: 14, paddingBottom: 28, flexGrow: 1 },
   sep: { height: 10 },
 

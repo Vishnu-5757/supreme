@@ -147,7 +147,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           <View style={{ width: 34 }} />
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#F4F5F7', marginTop: -24 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#F4F5F7', marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Icon + heading */}
@@ -237,10 +237,7 @@ const s = StyleSheet.create({
   topBar: {
     backgroundColor: P,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18,
-    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
-    elevation: 4,
-    shadowColor: P, shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
   },
   backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },

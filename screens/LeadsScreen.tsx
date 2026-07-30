@@ -24,6 +24,8 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
+import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
+import { userCache } from '../hooks/userCache';
 
 const { height } = Dimensions.get('window');
 
@@ -642,6 +644,16 @@ const loadStyles = StyleSheet.create({
 // ── Main LeadsScreen Component ────────────────────────────────────
 export default function LeadsScreen({ navigation, route }: any) {
   const { apiRequest } = useAuthApi();
+  const insets = useSafeAreaInsets();
+
+  const [notifCount, setNotifCount] = useState(() => getBadgeCount());
+  useEffect(() => subscribeBadge(setNotifCount), []);
+
+  const cachedUser = userCache.current;
+  const avatarName = cachedUser?.first_name
+    ? `${cachedUser.first_name} ${cachedUser.last_name ?? ''}`.trim()
+    : (cachedUser?.username ?? 'U');
+  const avatarInitials = avatarName.split(' ').filter(Boolean).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -971,12 +983,22 @@ export default function LeadsScreen({ navigation, route }: any) {
                 </Text>
               </View>
               <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.iconBtn} onPress={onRefresh}>
-                  <MaterialCommunityIcons name="refresh" size={18} color="#FFF" />
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => { clearBadge(); navigation.navigate('Notifications'); }}
+                >
+                  <MaterialCommunityIcons name="bell-outline" size={18} color="#FFF" />
+                  {notifCount > 0 && (
+                    <View style={styles.notifBadge}>
+                      <Text style={styles.notifBadgeText}>{notifCount > 9 ? '9+' : String(notifCount)}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.addButton} onPress={navigateToAddLead}>
-                  <MaterialCommunityIcons name="plus" size={18} color={THEME.primary} />
-                  <Text style={styles.addButtonText}>New</Text>
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => navigation.navigate('Profile', { user: cachedUser })}
+                >
+                  <Text style={styles.avatarInitial}>{avatarInitials}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -998,6 +1020,7 @@ export default function LeadsScreen({ navigation, route }: any) {
             </View>
           </View>
 
+          <View style={styles.bodyWrap}>
           <View style={styles.filterStrip}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               <TouchableOpacity style={[styles.filterPill, qualityFilter.length > 0 && styles.filterPillActive]} onPress={openQualityModal}>
@@ -1057,6 +1080,15 @@ export default function LeadsScreen({ navigation, route }: any) {
             ListFooterComponent={renderFooter}
             scrollEventThrottle={16}
           />
+
+          <TouchableOpacity
+            style={[styles.fab, { bottom: 90 + insets.bottom }]}
+            onPress={navigateToAddLead}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
+          </TouchableOpacity>
+          </View>
 
           <LeadDetailModal
             lead={selectedLead}
@@ -1163,14 +1195,22 @@ export default function LeadsScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: THEME.primary },
-  screenWrap: { flex: 1, backgroundColor: THEME.bg },
+  screenWrap: { flex: 1, backgroundColor: THEME.primary },
+  bodyWrap: {
+    flex: 1,
+    backgroundColor: THEME.bg,
+    marginTop: -16,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loaderText: { fontSize: 14, color: THEME.muted, fontWeight: '500' },
   headerWrap: {
     backgroundColor: THEME.primary,
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 14,
+    paddingBottom: 26,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1185,13 +1225,15 @@ const styles = StyleSheet.create({
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.85)',
   },
-  addButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#FFF', paddingHorizontal: 12,
-    height: 34, borderRadius: 17,
+  notifBadge: {
+    position: 'absolute', top: 2, right: 2, minWidth: 15, height: 15, borderRadius: 8,
+    backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3, borderWidth: 1.5, borderColor: THEME.primary,
   },
-  addButtonText: { color: THEME.primary, fontSize: 13, fontWeight: '700' },
+  notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
+  avatarInitial: { color: '#FFF', fontSize: 13, fontWeight: '800' },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FFF', borderRadius: 10,
@@ -1319,6 +1361,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 8,
   },
   emptyAddText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: THEME.primary,
+    alignItems: 'center', justifyContent: 'center',
+    elevation: 8,
+    shadowColor: THEME.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
   footerLoader: {
     paddingVertical: 20,
     alignItems: 'center', justifyContent: 'center',

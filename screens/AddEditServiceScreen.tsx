@@ -843,7 +843,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
         </View>
 
        
-  <View style={{ flex: 1, backgroundColor: THEME.bg, marginTop: -24, paddingTop: 29 }}>
+  <View style={{ flex: 1, backgroundColor: THEME.bg, marginTop: -24, paddingTop: 29, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }}>
         <KeyboardAvoidingView
           style={styles.keyboardWrap}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1181,15 +1181,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    zIndex: 1,
-    elevation: 4,
-    shadowColor: THEME.primary,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    paddingBottom: 34,
   },
   backBtn: {
     width: 34,
@@ -1215,7 +1207,7 @@ const styles = StyleSheet.create({
   topAvatarText: { fontSize: 20, fontWeight: '800', color: THEME.primary },
   topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub: { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
-  keyboardWrap: { flex: 1 },
+  keyboardWrap: { flex: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
   card: {

@@ -612,8 +612,10 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
         <View style={styles.bodyWrap}>
           {canSave && hasLocalChanges && (
             <View style={styles.alertTape}>
-              <MaterialCommunityIcons name="database-edit-outline" size={13} color={THEME.warning} />
-              <Text style={styles.alertTapeText}>You have unsaved local changes — tap sync to push.</Text>
+              <View style={styles.alertTapeIconWrap}>
+                <MaterialCommunityIcons name="database-edit-outline" size={14} color={THEME.warning} />
+              </View>
+              <Text style={styles.alertTapeText}>You have unsaved changes — tap sync to push them.</Text>
             </View>
           )}
 
@@ -684,16 +686,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    paddingBottom: 40,
     gap: 10,
-    zIndex: 1,
-    elevation: 4,
-    shadowColor: THEME.primary,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
   },
   backBtn: {
     width: 34, height: 34, borderRadius: 10,
@@ -720,13 +714,25 @@ const styles = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4,
   },
   headerSyncBtnDisabled: { backgroundColor: 'rgba(53, 17, 17, 0.2)', elevation: 0 },
-  bodyWrap: { flex: 1, backgroundColor: THEME.bg, marginTop: -28, paddingTop: 33 },
+  bodyWrap: { flex: 1, backgroundColor: THEME.bg, marginTop: -28, paddingTop: 33, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   alertTape: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: THEME.warningLight, paddingVertical: 7, paddingHorizontal: 16,
-    marginTop: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: THEME.warningLight,
+    borderRadius: 14,
+    paddingVertical: 10, paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(217,119,6,0.18)',
   },
-  alertTapeText: { fontSize: 11, fontWeight: '600', color: '#78350F' },
+  alertTapeIconWrap: {
+    width: 28, height: 28, borderRadius: 9,
+    backgroundColor: '#FFF',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(217,119,6,0.25)',
+  },
+  alertTapeText: { flex: 1, fontSize: 11.5, fontWeight: '600', color: '#78350F', lineHeight: 16 },
   sectionRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginBottom: 10, marginTop: 2,

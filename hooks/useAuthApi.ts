@@ -1,5 +1,5 @@
 // hooks/useAuthApi.ts
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { API_BASE_URL } from '../config';
 
@@ -102,7 +102,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
 export const useAuthApi = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const apiRequest = async (
+  const apiRequest = useCallback(async (
     url: string,
     options: RequestInit = {},
     retry = true
@@ -146,7 +146,7 @@ export const useAuthApi = () => {
       }
     }
     return fire403(response);
-  };
+  }, []);
 
   return { apiRequest, isRefreshing };
 };

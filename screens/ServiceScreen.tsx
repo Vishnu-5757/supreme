@@ -6,7 +6,7 @@ import {
   FlatList, Animated, Dimensions, Linking, ScrollView,
   Alert, Pressable, PanResponder,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
@@ -114,6 +114,87 @@ const Toast = ({ message, type, visible, onHide }: any) => {
   );
 };
 
+// ── Feedback Modal (centered, same style as AddEditServiceScreen) ─
+const SS_FM_CFG = {
+  success: { bg: '#059669', tint: '#ECFDF5', icon: 'check-bold',  btn: 'Done'   },
+  error:   { bg: '#DC2626', tint: '#FEF2F2', icon: 'close-thick', btn: 'Got it' },
+  info:    { bg: '#2563EB', tint: '#EFF6FF', icon: 'information', btn: 'OK'     },
+} as const;
+
+const ServiceFeedbackModal = ({ visible, type, title, message, onClose, autoDismiss = false }: {
+  visible: boolean; type: 'success' | 'error' | 'info';
+  title: string; message: string; onClose: () => void; autoDismiss?: boolean;
+}) => {
+  const cfg  = SS_FM_CFG[type];
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      anim.setValue(0);
+      Animated.spring(anim, { toValue: 1, tension: 70, friction: 11, useNativeDriver: true }).start();
+      if (autoDismiss) {
+        const delay = type === 'success' ? 1000 : 2000;
+        const t = setTimeout(onClose, delay);
+        return () => clearTimeout(t);
+      }
+    } else {
+      anim.setValue(0);
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  const cardScale   = anim.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] });
+  const cardOpacity = anim.interpolate({ inputRange: [0, 0.4], outputRange: [0, 1], extrapolate: 'clamp' });
+  const iconScale   = anim.interpolate({ inputRange: [0, 0.6, 0.82, 1], outputRange: [0, 1.15, 0.95, 1] });
+  const ctOpacity   = anim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0, 1], extrapolate: 'clamp' });
+  const ctY         = anim.interpolate({ inputRange: [0.4, 1], outputRange: [10, 0], extrapolate: 'clamp' });
+
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <View style={sfmStyles.overlay}>
+        <Animated.View style={[sfmStyles.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}>
+          <View style={sfmStyles.iconZone}>
+            <Animated.View style={[sfmStyles.iconBg, { backgroundColor: cfg.tint, transform: [{ scale: iconScale }] }]}>
+              <MaterialCommunityIcons name={cfg.icon as any} size={34} color={cfg.bg} />
+            </Animated.View>
+          </View>
+          <Animated.View style={[sfmStyles.textZone, { opacity: ctOpacity, transform: [{ translateY: ctY as any }] }]}>
+            <Text style={sfmStyles.title}>{title}</Text>
+            <Text style={sfmStyles.message}>{message}</Text>
+          </Animated.View>
+          <View style={sfmStyles.sep} />
+          {autoDismiss && type === 'success' ? (
+            <View style={sfmStyles.spinRow}>
+              <ActivityIndicator size="small" color={cfg.bg} />
+              <Text style={[sfmStyles.spinText, { color: cfg.bg }]}>Please wait…</Text>
+            </View>
+          ) : !autoDismiss ? (
+            <TouchableOpacity style={sfmStyles.btn} onPress={onClose} activeOpacity={0.7}>
+              <Text style={[sfmStyles.btnText, { color: cfg.bg }]}>{cfg.btn}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const sfmStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.52)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  card: { width: '100%', backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 18 },
+  iconZone: { paddingTop: 34, alignItems: 'center' },
+  iconBg: { width: 74, height: 74, borderRadius: 37, alignItems: 'center', justifyContent: 'center' },
+  textZone: { paddingHorizontal: 28, paddingTop: 18, paddingBottom: 26, alignItems: 'center' },
+  title: { fontSize: 19, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 8, letterSpacing: 0.1 },
+  message: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22 },
+  sep: { height: 1, backgroundColor: '#F1F5F9' },
+  btn: { paddingVertical: 17, alignItems: 'center', backgroundColor: '#fff' },
+  btnText: { fontSize: 16, fontWeight: '700', letterSpacing: 0.1 },
+  spinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 },
+  spinText: { fontSize: 14, fontWeight: '600' },
+});
+
 // ── Custom Delete Confirmation Modal ────────────────────────────
 const DeleteConfirmModal = ({
   visible,
@@ -187,6 +268,7 @@ const DetailRow = ({ icon, label, value, color }: any) => {
 const ServiceDetailModal = ({ service, visible, onClose, onEdit, onDelete, onCall }: any) => {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const backdropOp = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -241,7 +323,7 @@ const ServiceDetailModal = ({ service, visible, onClose, onEdit, onDelete, onCal
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
 
-        <Animated.View style={[styles.detailSheet, { transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View style={[styles.detailSheet, { transform: [{ translateY: slideAnim }], paddingBottom: insets.bottom }]}>
           <View {...panResponder.panHandlers} style={styles.handleArea}>
             <View style={styles.sheetHandle} />
             <Text style={styles.swipeHint}>Swipe down to dismiss</Text>
@@ -389,7 +471,91 @@ const ServiceCard = React.memo(({ service, index, onPress }: any) => {
     </Animated.View>
   );
 });
+// ── ✨ NEW: Attractive Loading Screen ────────────────────────────
+const LoadingScreen = () => {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const spin = useRef(new Animated.Value(0)).current;
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const shimmer1 = useRef(new Animated.Value(0.4)).current;
+  const shimmer2 = useRef(new Animated.Value(0.4)).current;
+  const shimmer3 = useRef(new Animated.Value(0.4)).current;
 
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.12, duration: 700, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+    ])).start();
+    Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 1200, useNativeDriver: true })
+    ).start();
+    const makeShimmer = (anim: Animated.Value, delay: number) =>
+      Animated.loop(Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ]));
+    makeShimmer(shimmer1, 0).start();
+    makeShimmer(shimmer2, 200).start();
+    makeShimmer(shimmer3, 400).start();
+  }, []);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+ return (
+    <Animated.View style={[loadStyles.wrapper, { opacity: fadeIn }]}>
+      <View style={loadStyles.body}>
+        <View style={loadStyles.spinnerWrap}>
+          <Animated.View style={[loadStyles.spinRing, { transform: [{ rotate }] }]} />
+          <Animated.View style={[loadStyles.iconCircle, { transform: [{ scale: pulse }] }]}>
+            <MaterialCommunityIcons name="toolbox-outline" size={30} color="#FFF" />
+          </Animated.View>
+        </View>
+        <Text style={loadStyles.title}>Loading Services</Text>
+        <Text style={loadStyles.subtitle}>Fetching your records…</Text>
+        {([shimmer1, shimmer2, shimmer3] as Animated.Value[]).map((anim, i) => (
+          <Animated.View key={i} style={[loadStyles.skeletonCard, { opacity: anim }]}>
+            <View style={loadStyles.skeletonAvatar} />
+            <View style={loadStyles.skeletonContent}>
+              <View style={[loadStyles.skeletonLine, { width: '65%', marginBottom: 8 }]} />
+              <View style={[loadStyles.skeletonLine, { width: '40%', height: 8 }]} />
+            </View>
+            <View style={loadStyles.skeletonBadge} />
+          </Animated.View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+const loadStyles = StyleSheet.create({
+  wrapper: { flex: 1, backgroundColor: THEME.bg },
+  topAccent: { height: 6, backgroundColor: THEME.primary, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
+  body: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 48 },
+  spinnerWrap: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  spinRing: {
+    position: 'absolute', width: 90, height: 90, borderRadius: 45,
+    borderWidth: 3, borderColor: THEME.primary,
+    borderTopColor: 'transparent', borderRightColor: THEME.primaryLight,
+  },
+  iconCircle: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.primary,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: THEME.primary, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 8,
+  },
+  title: { fontSize: 20, fontWeight: '800', color: THEME.text, marginBottom: 6 },
+  subtitle: { fontSize: 13, color: THEME.muted, marginBottom: 32 },
+  skeletonCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF',
+    borderRadius: 14, padding: 14, marginBottom: 10, width: '100%',
+    borderWidth: 1, borderColor: THEME.borderLight, elevation: 1,
+  },
+  skeletonAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: THEME.primaryLight, marginRight: 12 },
+  skeletonContent: { flex: 1 },
+  skeletonLine: { height: 10, borderRadius: 6, backgroundColor: THEME.borderLight },
+  skeletonBadge: { width: 52, height: 22, borderRadius: 6, backgroundColor: THEME.primaryLight },
+});
 // ── Main Screen ──────────────────────────────────────────────────
 export default function ServiceScreen({ navigation }: any) {
   const { apiRequest } = useAuthApi();
@@ -402,6 +568,7 @@ export default function ServiceScreen({ navigation }: any) {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [levelFilter, setLevelFilter] = useState<string[]>([]);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+  const [deleteFeedback, setDeleteFeedback] = useState({ visible: false, type: 'success' as 'success' | 'error', title: '', message: '' });
   const [selectedService, setSelectedService] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -536,12 +703,12 @@ export default function ServiceScreen({ navigation }: any) {
       if (res.ok) {
         setServices(prev => prev.filter(s => s.id !== deleteTarget.id));
         setTotalCount(c => c - 1);
-        showToast('Service deleted', 'success');
+        setDeleteFeedback({ visible: true, type: 'success', title: 'Deleted!', message: 'The service record has been deleted successfully.' });
       } else {
-        showToast('Failed to delete', 'error');
+        setDeleteFeedback({ visible: true, type: 'error', title: 'Delete Failed', message: 'Could not delete the service. Please try again.' });
       }
     } catch {
-      showToast('Failed to delete', 'error');
+      setDeleteFeedback({ visible: true, type: 'error', title: 'Delete Failed', message: 'Something went wrong. Please try again.' });
     } finally {
       setDeleteLoading(false);
       setDeleteTarget(null);
@@ -595,20 +762,17 @@ export default function ServiceScreen({ navigation }: any) {
 
   if (loading && !refreshing && services.length === 0) {
     return (
-      <View style={{ flex: 1 }}>
-        <SafeAreaView style={styles.container} edges={['top']}>
-          <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
-          <View style={styles.centerLoader}>
-            <ActivityIndicator size="large" color={THEME.primary} />
-            <Text style={styles.loaderText}>Loading services…</Text>
-          </View>
+      <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <LoadingScreen />
         </SafeAreaView>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: THEME.primary }}>
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
         <Toast
@@ -616,6 +780,14 @@ export default function ServiceScreen({ navigation }: any) {
           message={toast.message}
           type={toast.type}
           onHide={() => setToast(t => ({ ...t, visible: false }))}
+        />
+        <ServiceFeedbackModal
+          visible={deleteFeedback.visible}
+          type={deleteFeedback.type}
+          title={deleteFeedback.title}
+          message={deleteFeedback.message}
+          autoDismiss={deleteFeedback.type === 'success'}
+          onClose={() => setDeleteFeedback(f => ({ ...f, visible: false }))}
         />
         <Animated.View style={[styles.screenWrap, { opacity: fadeAnim }]}>
           <View style={styles.headerWrap}>
@@ -819,8 +991,8 @@ export default function ServiceScreen({ navigation }: any) {
 
 // ── Styles ───────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.bg },
-  screenWrap: { flex: 1 },
+  container: { flex: 1, backgroundColor: THEME.primary },
+  screenWrap: { flex: 1, backgroundColor: THEME.bg },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loaderText: { fontSize: 14, color: THEME.muted },
 
@@ -915,10 +1087,10 @@ const styles = StyleSheet.create({
   sheetMobile: { fontSize: 13, color: THEME.muted, marginBottom: 8 },
   sheetBadgeRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
   qualityBadgeLarge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
-  qualityBadgeLargeText: { fontSize: 13, fontWeight: '800' },
+  qualityBadgeLargeText: { fontSize: 11, fontWeight: '800' },
   sheetBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,

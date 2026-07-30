@@ -14,6 +14,12 @@ let logoutTimer: NodeJS.Timeout | null = null;
 // Callback to be set by the app (e.g., from your navigation/context)
 let onSessionExpiredCallback: (() => void) | null = null;
 
+// Global 403 handler — set once in App, fired by every apiRequest that gets a 403
+let on403Callback: ((message: string) => void) | null = null;
+export const set403Callback = (cb: ((message: string) => void) | null) => {
+  on403Callback = cb;
+};
+
 // Decode refresh token and get expiry time
 const getRefreshTokenExpiry = (token: string): number | null => {
   try {
@@ -109,6 +115,18 @@ export const useAuthApi = () => {
       return fetch(url, { ...options, headers });
     };
 
+    const fire403 = async (res: Response) => {
+      if (res.status === 403 && on403Callback) {
+        let msg = "You don't have permission to do this.";
+        try {
+          const body = await res.clone().json();
+          msg = body.error || body.detail || body.message || msg;
+        } catch {}
+        on403Callback(msg);
+      }
+      return res;
+    };
+
     let response = await makeRequest(globalAccessToken);
     if (response.status === 401 && retry) {
       if (refreshPromise) {
@@ -121,13 +139,13 @@ export const useAuthApi = () => {
         const newToken = await refreshPromise;
         if (!newToken) throw new Error('SESSION_EXPIRED');
         response = await makeRequest(newToken);
-        return response;
+        return fire403(response);
       } finally {
         setIsRefreshing(false);
         refreshPromise = null;
       }
     }
-    return response;
+    return fire403(response);
   };
 
   return { apiRequest, isRefreshing };

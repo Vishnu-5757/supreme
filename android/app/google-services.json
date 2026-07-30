@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1029767308790",
+    "project_id": "supreme-9f8cd",
+    "storage_bucket": "supreme-9f8cd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1029767308790:android:d9a0455cf2b2b7fa00d3d7",
+        "android_client_info": {
+          "package_name": "Supreme.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvoZmTioILREl-KTO7LB-pR7muhLr2uU4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1029767308790:android:e5a4f4b696248d8c00d3d7",
+        "android_client_info": {
+          "package_name": "com.bobx47.supremeenergies"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvoZmTioILREl-KTO7LB-pR7muhLr2uU4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

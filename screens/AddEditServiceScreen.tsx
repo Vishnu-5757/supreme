@@ -1,5 +1,5 @@
 // AddEditServiceScreen.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
   FlatList,
   Dimensions,
   Pressable,
+  StatusBar,  // ✅ added
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -59,111 +60,73 @@ interface FeedbackModalProps {
   autoDismiss?: boolean;
 }
 
+const FM_CFG = {
+  success: { bg: '#059669', tint: '#ECFDF5', icon: 'check-bold',  btn: 'Done'   },
+  error:   { bg: '#DC2626', tint: '#FEF2F2', icon: 'close-thick', btn: 'Got it' },
+  info:    { bg: '#2563EB', tint: '#EFF6FF', icon: 'information', btn: 'OK'     },
+} as const;
+
 const FeedbackModal: React.FC<FeedbackModalProps> = ({
-  visible,
-  type,
-  title,
-  message,
-  onClose,
-  autoDismiss = false,
+  visible, type, title, message, onClose, autoDismiss = false,
 }) => {
-  const scaleAnim = useRef(new Animated.Value(0.82)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const cfg      = FM_CFG[type];
+  const anim     = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 65,
-          friction: 7,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
+      anim.setValue(0);
+      Animated.spring(anim, { toValue: 1, tension: 70, friction: 11, useNativeDriver: true }).start();
       if (autoDismiss) {
-        const t = setTimeout(onClose, 2200);
+        const delay = type === 'success' ? 1000 : 2000;
+        const t = setTimeout(onClose, delay);
         return () => clearTimeout(t);
       }
     } else {
-      scaleAnim.setValue(0.82);
-      opacityAnim.setValue(0);
+      anim.setValue(0);
     }
-  }, [visible, autoDismiss, onClose, opacityAnim, scaleAnim]);
-
-  const cfg = {
-    success: {
-      iconBg: THEME.successLt,
-      iconColor: THEME.success,
-      icon: 'check-circle',
-      btnColor: THEME.success,
-      bar: THEME.success,
-    },
-    error: {
-      iconBg: THEME.dangerLt,
-      iconColor: THEME.danger,
-      icon: 'close-circle',
-      btnColor: THEME.danger,
-      bar: THEME.danger,
-    },
-    info: {
-      iconBg: THEME.infoLt,
-      iconColor: THEME.info,
-      icon: 'information',
-      btnColor: THEME.info,
-      bar: THEME.info,
-    },
-  }[type];
+  }, [visible]);
 
   if (!visible) return null;
 
-  return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <View style={fmStyles.overlay}>
-        <Animated.View
-          style={[
-            fmStyles.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={[fmStyles.bar, { backgroundColor: cfg.bar }]} />
-          <View style={[fmStyles.iconBubble, { backgroundColor: cfg.iconBg }]}>
-            <MaterialCommunityIcons
-              name={cfg.icon as any}
-              size={44}
-              color={cfg.iconColor}
-            />
-          </View>
-          <Text style={fmStyles.title}>{title}</Text>
-          <Text style={fmStyles.message}>{message}</Text>
+  const cardScale   = anim.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] });
+  const cardOpacity = anim.interpolate({ inputRange: [0, 0.4], outputRange: [0, 1], extrapolate: 'clamp' });
+  const iconScale   = anim.interpolate({ inputRange: [0, 0.6, 0.82, 1], outputRange: [0, 1.15, 0.95, 1] });
+  const ctOpacity   = anim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0, 1], extrapolate: 'clamp' });
+  const ctY         = anim.interpolate({ inputRange: [0.4, 1], outputRange: [10, 0], extrapolate: 'clamp' });
 
-          {!autoDismiss ? (
-            <TouchableOpacity
-              style={[fmStyles.btn, { backgroundColor: cfg.btnColor }]}
-              onPress={onClose}
-              activeOpacity={0.85}
-            >
-              <Text style={fmStyles.btnText}>Got it</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={fmStyles.dismissRow}>
-              <ActivityIndicator size="small" color={cfg.iconColor} />
-              <Text style={[fmStyles.dismissText, { color: cfg.iconColor }]}>
-                {type === 'success' ? 'Going back…' : 'Please wait…'}
-              </Text>
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <View style={fmStyles.overlay}>
+        <Animated.View style={[fmStyles.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}>
+
+          {/* Icon zone */}
+          <View style={fmStyles.iconZone}>
+            <Animated.View style={[fmStyles.iconBg, { backgroundColor: cfg.tint, transform: [{ scale: iconScale }] }]}>
+              <MaterialCommunityIcons name={cfg.icon as any} size={34} color={cfg.bg} />
+            </Animated.View>
+          </View>
+
+          {/* Text */}
+          <Animated.View style={[fmStyles.textZone, { opacity: ctOpacity, transform: [{ translateY: ctY as any }] }]}>
+            <Text style={fmStyles.title}>{title}</Text>
+            <Text style={fmStyles.message}>{message}</Text>
+          </Animated.View>
+
+          {/* Separator */}
+          <View style={fmStyles.sep} />
+
+          {/* Button flush at bottom — full width, no side padding */}
+          {autoDismiss && type === 'success' ? (
+            <View style={fmStyles.spinRow}>
+              <ActivityIndicator size="small" color={cfg.bg} />
+              <Text style={[fmStyles.spinText, { color: cfg.bg }]}>Going back…</Text>
             </View>
-          )}
+          ) : !autoDismiss ? (
+            <TouchableOpacity style={fmStyles.btn} onPress={onClose} activeOpacity={0.7}>
+              <Text style={[fmStyles.btnText, { color: cfg.bg }]}>{cfg.btn}</Text>
+            </TouchableOpacity>
+          ) : null}
+
         </Animated.View>
       </View>
     </Modal>
@@ -173,62 +136,71 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
 const fmStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 18, 36, 0.65)',
+    backgroundColor: 'rgba(0,0,0,0.52)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 32,
   },
   card: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    alignItems: 'center',
-    paddingBottom: 28,
-    paddingHorizontal: 24,
+    backgroundColor: '#fff',
+    borderRadius: 24,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 20,
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 18,
   },
-  bar: { width: '100%', height: 5, marginBottom: 28 },
-  iconBubble: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+  iconZone: {
+    paddingTop: 34,
+    alignItems: 'center',
+  },
+  iconBg: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+  },
+  textZone: {
+    paddingHorizontal: 28,
+    paddingTop: 18,
+    paddingBottom: 26,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: 'center',
-    marginBottom: 10,
-    letterSpacing: 0.2,
+    marginBottom: 8,
+    letterSpacing: 0.1,
   },
   message: {
     fontSize: 14,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 26,
+  },
+  sep: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
   },
   btn: {
-    width: '100%',
-    paddingVertical: 15,
-    borderRadius: 16,
+    paddingVertical: 17,
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  btnText: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-  dismissRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  dismissText: { fontSize: 14, fontWeight: '600' },
+  btnText: { fontSize: 16, fontWeight: '700', letterSpacing: 0.1 },
+  spinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 18,
+  },
+  spinText: { fontSize: 14, fontWeight: '600' },
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -643,14 +615,13 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
     return () => navigation.setOptions({ gestureEnabled: true });
   }, [navigation]);
 
-  // ✅ Fixed: fetch assignable users only ONCE on mount
+  // ✅ Fetch assignable users only ONCE on mount
   useEffect(() => {
     (async () => {
       try {
         const res = await apiRequest(`${API_BASE_URL}/service/api/assignable-users/`);
         if (res.ok) {
           const data = await res.json();
-          // The endpoint returns a plain array, but we also handle if it's wrapped
           const users: ManageItem[] = (Array.isArray(data) ? data : (data.results || [])).map(
             (u: any) => ({
               id: u.id,
@@ -663,7 +634,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
         console.warn('Could not fetch assignable users', e);
       }
     })();
-  }, []); // ← empty dependency – runs once on mount
+  }, []);
 
   useEffect(() => {
     if (isEdit && serviceId) {
@@ -673,7 +644,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
           if (res.ok) {
             const data = await res.json();
             setCustomerName(data.customer_name || '');
-            setMobile(data.mobile || '');
+            setMobile((data.mobile || '').replace(/\D/g, '').slice(-10));
             setAddress(data.address || '');
             setComplaints(data.complaints || '');
             setServiceCharge(data.service_charge ? String(data.service_charge) : '');
@@ -703,7 +674,8 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
     } else {
       setLoadingData(false);
     }
-  }, [isEdit, serviceId, apiRequest, navigation]);
+    }, [isEdit, serviceId]);
+
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -717,8 +689,10 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
     const e: Record<string, string> = {};
     if (!customerName.trim()) e.customerName = 'Customer name is required';
     if (!mobile.trim()) e.mobile = 'Mobile number is required';
-    else if (!/^\+?[\d\s\-]{7,15}$/.test(mobile.trim())) e.mobile = 'Enter a valid mobile number';
+    else if (!/^\d{10}$/.test(mobile.trim())) e.mobile = 'Enter a valid 10-digit mobile number';
     if (!complaints.trim()) e.complaints = 'Complaints are required';
+    if (serviceCharge.trim() && !/^\d+(\.\d{0,2})?$/.test(serviceCharge.trim()))
+      e.serviceCharge = 'Enter a valid amount (e.g. 250 or 250.50)';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -808,29 +782,37 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
     }
   };
 
-  const closeFeedback = () => {
+    const closeFeedback = useCallback(() => {
     setFeedbackModal(prev => ({ ...prev, visible: false }));
     if (feedbackModal.type === 'success' && feedbackModal.autoDismiss) {
       route?.params?.onSuccess?.();
       navigation.goBack();
     }
-  };
+  }, [feedbackModal.type, feedbackModal.autoDismiss, navigation, route]);
+
 
   const avatarLetter = isEdit ? (customerName?.[0] || 'S').toUpperCase() : 'S';
 
+  // Loading state while fetching existing service
+  // WITH THIS:
   if (loadingData && isEdit) {
     return (
-      <SafeAreaView style={styles.root} edges={['top']}>
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.loaderText}>Loading service…</Text>
-        </View>
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
+        <SafeAreaView style={styles.root} edges={['top']}>
+          <View style={{ flex: 1, backgroundColor: THEME.bg, justifyContent: 'center', alignItems: 'center', gap: 12 }}>
+            <ActivityIndicator size="large" color={THEME.primary} />
+            <Text style={styles.loaderText}>Loading service…</Text>
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+   <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+      <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
+
       <FeedbackModal
         visible={feedbackModal.visible}
         type={feedbackModal.type}
@@ -840,7 +822,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
         onClose={closeFeedback}
       />
 
-      <SafeAreaView style={styles.root} edges={['top']}>
+     <SafeAreaView style={styles.root} edges={['top']}>
         {/* Top Bar */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -860,6 +842,8 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
           <View style={{ width: 34 }} />
         </View>
 
+       
+  <View style={{ flex: 1, backgroundColor: THEME.bg, marginTop: -24, paddingTop: 29 }}>
         <KeyboardAvoidingView
           style={styles.keyboardWrap}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -867,7 +851,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
           <ScrollView
             ref={scrollRef}
             style={styles.scroll}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: 80 + insets.bottom }]}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: 4 }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
@@ -893,11 +877,13 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
                   <StyledInput
                     value={mobile}
                     onChangeText={(v: string) => {
-                      setMobile(v);
+                      const digits = v.replace(/\D/g, '').slice(0, 10);
+                      setMobile(digits);
                       if (errors.mobile) setErrors(e => ({ ...e, mobile: '' }));
                     }}
-                    placeholder="+91 98765 43210"
+                    placeholder="98765 43210"
                     keyboardType="phone-pad"
+                    maxLength={10}
                     error={errors.mobile}
                   />
                 </FieldWrap>
@@ -931,12 +917,16 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
                   />
                 </FieldWrap>
 
-                <FieldWrap label="Service Charge (₹)">
+                <FieldWrap label="Service Charge (₹)" error={errors.serviceCharge}>
                   <StyledInput
                     value={serviceCharge}
-                    onChangeText={setServiceCharge}
+                    onChangeText={(v: string) => {
+                      setServiceCharge(v);
+                      if (errors.serviceCharge) setErrors(e => ({ ...e, serviceCharge: '' }));
+                    }}
                     placeholder="0.00"
                     keyboardType="decimal-pad"
+                    error={errors.serviceCharge}
                   />
                 </FieldWrap>
               </View>
@@ -1163,6 +1153,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
             </View>
           </View>
         </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
 
       {/* Technician Picker */}
@@ -1180,7 +1171,8 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
 
 // ─── Styles ──────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: THEME.bg },
+  // WITH THIS:
+  root: { flex: 1, backgroundColor: 'transparent', overflow: 'visible' },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loaderText: { fontSize: 14, color: THEME.muted },
   topBar: {
@@ -1192,6 +1184,12 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    zIndex: 1,
+    elevation: 4,
+    shadowColor: THEME.primary,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   backBtn: {
     width: 34,

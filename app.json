@@ -4,52 +4,29 @@
     "slug": "supremeenergies",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/one.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
+     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "contain", 
+      "resizeMode": "cover",
       "backgroundColor": "#0A1C23"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "splash": {
-        "image": "./assets/splash.png",
-        "resizeMode": "cover",
-        "backgroundColor": "#0A1C23",
-        "tabletImage": "./assets/splash.png"
-      }
-    },
-    "android": {
-      "splash": {
-        "image": "./assets/splash.png",
-        "resizeMode": "cover",
-        "backgroundColor": "#0A1C23",
-        "mdpi": "./assets/splash.png",
-        "hdpi": "./assets/splash.png",
-        "xhdpi": "./assets/splash.png",
-        "xxhdpi": "./assets/splash.png",
-        "xxxhdpi": "./assets/splash.png"
-      },
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0A1C23"
-      },
-      "package": "com.bobx47.supremeenergies",
-      "usesCleartextTraffic": true,
-      "permissions": [
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.CAMERA"
-      ]
-    },
-    "extra": {
-      "eas": {
-        "projectId": "b0dd796e-ee34-43c3-9769-bb0a1ddf7500"
-      }
     },
     "plugins": [
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/one.png",
+          "color": "#8E1C1C",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A1C23"
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -66,6 +43,27 @@
         }
       ],
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/one.png",
+        "backgroundColor": "#00000000"
+      },
+      "package": "com.bobx47.supremeenergies",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b0dd796e-ee34-43c3-9769-bb0a1ddf7500"
+      }
+    }
   }
 }

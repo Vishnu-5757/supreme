@@ -14,16 +14,104 @@ import {
   Pressable,
   Keyboard,
   Easing,
-  ScrollView,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { API_BASE_URL } from '../config';
+import { setAuthTokens } from '../hooks/useAuthApi';
+import { clearPermissionsCache } from '../hooks/usePermissions';
+import { registerForPushNotificationsAsync } from '../hooks/useNotifications';
 
 const { height } = Dimensions.get('window');
 
+const HEADER_FULL = height * 0.26;
+const HEADER_COMPACT = height * 0.09;
+const BADGE_SIZE = 76;
+
+// ---------- Floating label underline input ----------
+function FloatingInput({
+  label,
+  value,
+  onChangeText,
+  onFocus,
+  onBlur,
+  secureTextEntry,
+  rightIcon,
+  onRightIconPress,
+  leftIconName,
+  focused,
+  inputRef,
+  returnKeyType,
+  onSubmitEditing,
+}: any) {
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: focused || value ? 1 : 0,
+      duration: 180,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [focused, value, anim]);
+
+  const labelTop = anim.interpolate({ inputRange: [0, 1], outputRange: [16, -8] });
+  const labelSize = anim.interpolate({ inputRange: [0, 1], outputRange: [14.5, 11] });
+  const labelColor = focused ? '#8E1C1C' : '#94A3B8';
+
+  return (
+    <View style={styles.floatWrap}>
+      <MaterialCommunityIcons
+        name={leftIconName}
+        size={18}
+        color={focused ? '#8E1C1C' : '#B0B8C4'}
+        style={styles.floatIcon}
+      />
+      <View style={styles.floatInputArea}>
+        <Animated.Text
+          style={[
+            styles.floatLabel,
+            { top: labelTop, fontSize: labelSize, color: labelColor },
+          ]}
+        >
+          {label}
+        </Animated.Text>
+        <TextInput
+          ref={inputRef}
+          style={styles.floatInput}
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize="none"
+          autoCorrect={false}
+          selectionColor="#8E1C1C"
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+        />
+      </View>
+      {rightIcon && (
+        <TouchableOpacity onPress={onRightIconPress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <MaterialCommunityIcons name={rightIcon} size={19} color="#94A3B8" />
+        </TouchableOpacity>
+      )}
+      <Animated.View
+        style={[
+          styles.floatUnderline,
+          {
+            backgroundColor: focused ? '#8E1C1C' : '#E2E8F0',
+            height: focused ? 2 : 1,
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
 export default function LoginScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -36,36 +124,46 @@ export default function LoginScreen({ navigation }: any) {
   const passwordRef = useRef<TextInput>(null);
 
   const headerFade = useRef(new Animated.Value(0)).current;
-  const formFade = useRef(new Animated.Value(0)).current;
-  const formTranslateY = useRef(new Animated.Value(18)).current;
+  const cardFade = useRef(new Animated.Value(0)).current;
+  const cardTranslateY = useRef(new Animated.Value(24)).current;
+  const badgeScale = useRef(new Animated.Value(0.6)).current;
   const btnScale = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const messageOpacity = useRef(new Animated.Value(0)).current;
+
+  const headerHeight = useRef(new Animated.Value(HEADER_FULL)).current;
+  const badgeOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.timing(headerFade, {
         toValue: 1,
-        duration: 550,
+        duration: 500,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.parallel([
-        Animated.timing(formFade, {
+        Animated.timing(cardFade, {
           toValue: 1,
-          duration: 450,
+          duration: 420,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-        Animated.timing(formTranslateY, {
+        Animated.timing(cardTranslateY, {
           toValue: 0,
-          duration: 450,
+          duration: 420,
           easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(badgeScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 80,
           useNativeDriver: true,
         }),
       ]),
     ]).start();
-  }, [headerFade, formFade, formTranslateY]);
+  }, [headerFade, cardFade, cardTranslateY, badgeScale]);
 
   useEffect(() => {
     Animated.timing(messageOpacity, {
@@ -75,6 +173,49 @@ export default function LoginScreen({ navigation }: any) {
       useNativeDriver: true,
     }).start();
   }, [message, messageOpacity]);
+
+  // Shrink header + fade badge on keyboard open so inputs and button never get covered
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      Animated.parallel([
+        Animated.timing(headerHeight, {
+          toValue: HEADER_COMPACT,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(badgeOpacity, {
+          toValue: 0,
+          duration: 140,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      Animated.parallel([
+        Animated.timing(headerHeight, {
+          toValue: HEADER_FULL,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(badgeOpacity, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [headerHeight, badgeOpacity]);
 
   const triggerShake = () => {
     Animated.sequence([
@@ -145,6 +286,12 @@ export default function LoginScreen({ navigation }: any) {
       setMessage('');
       setMessageType('');
 
+      setAuthTokens(data.access, data.refresh);
+      clearPermissionsCache();
+      // Fire-and-forget: register this device for push notifications now that
+      // the auth token is available. Won't block navigation.
+      registerForPushNotificationsAsync();
+
       navigation.replace('MainTabs', {
         screen: 'Dashboard',
         params: {
@@ -167,190 +314,125 @@ export default function LoginScreen({ navigation }: any) {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-        <View style={styles.headerBackground}>
+        <Animated.View style={[styles.headerBackground, { height: headerHeight }]}>
           <View style={[styles.shape, styles.shapeOne]} />
           <View style={[styles.shape, styles.shapeTwo]} />
-          <View style={[styles.shape, styles.shapeThree]} />
 
           <SafeAreaView style={styles.headerContent}>
-            <Animated.View style={[styles.brandWrap, { opacity: headerFade }]}>
-              <View style={styles.logoWrapper}>
-                <View style={styles.logoInner}>
-                  <MaterialCommunityIcons name="flash" size={36} color="#FFFFFF" />
-                </View>
-              </View>
+            <Animated.View style={{ opacity: headerFade }}>
               <Text style={styles.brandMain}>SUPREME</Text>
               <Text style={styles.brandSub}>ENERGIES</Text>
-              <Text style={styles.heroText}>Secure access for your team</Text>
             </Animated.View>
           </SafeAreaView>
-        </View>
+        </Animated.View>
 
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
           style={styles.formArea}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            automaticallyAdjustKeyboardInsets={true}
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: cardFade,
+                transform: [{ translateY: cardTranslateY }, { translateX: shakeAnim }],
+              },
+            ]}
           >
             <Animated.View
               style={[
-                styles.formSection,
-                {
-                  opacity: formFade,
-                  transform: [{ translateY: formTranslateY }, { translateX: shakeAnim }],
-                },
+                styles.badge,
+                { opacity: badgeOpacity, transform: [{ scale: badgeScale }] },
               ]}
             >
-              <View style={styles.industrialWrapper}>
-                <View style={styles.accentBar} />
-                <Text style={styles.title}>LOGIN</Text>
-                <View style={styles.accentBar} />
-              </View>
-
-              <Text style={styles.subtitle}>
-                Enter your credentials to continue to the dashboard.
-              </Text>
-
-              <View style={styles.inputBlock}>
-                <View style={styles.labelRow}>
-                  <Text style={[styles.label, focusedInput === 'user' && styles.labelActive]}>
-                    USERNAME
-                  </Text>
-                  {focusedInput === 'user' && <View style={styles.pulseDot} />}
-                </View>
-
-                <Pressable
-                  style={[styles.inputContainer, focusedInput === 'user' && styles.inputActive]}
-                  onPress={() => usernameRef.current?.focus()}
-                >
-                  <MaterialCommunityIcons
-                    name="account-outline"
-                    size={20}
-                    color={focusedInput === 'user' ? '#8E1C1C' : '#94A3B8'}
-                    style={styles.leftIcon}
-                  />
-                  <TextInput
-                    ref={usernameRef}
-                    style={styles.input}
-                    placeholder="e.g. supreme"
-                    placeholderTextColor="#94A3B8"
-                    value={username}
-                    onChangeText={(text) => {
-                      setUsername(text);
-                      if (messageType === 'error') {
-                        setMessage('');
-                        setMessageType('');
-                      }
-                    }}
-                    onFocus={() => setFocusedInput('user')}
-                    onBlur={() => setFocusedInput(null)}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    selectionColor="#8E1C1C"
-                    returnKeyType="next"
-                    onSubmitEditing={() => passwordRef.current?.focus()}
-                  />
-                </Pressable>
-              </View>
-
-              <View style={styles.inputBlock}>
-                <View style={styles.labelRow}>
-                  <Text style={[styles.label, focusedInput === 'pass' && styles.labelActive]}>
-                    PASSWORD
-                  </Text>
-                  {focusedInput === 'pass' && <View style={styles.pulseDot} />}
-                </View>
-
-                <Pressable
-                  style={[styles.inputContainer, focusedInput === 'pass' && styles.inputActive]}
-                  onPress={() => passwordRef.current?.focus()}
-                >
-                  <MaterialCommunityIcons
-                    name="lock-outline"
-                    size={20}
-                    color={focusedInput === 'pass' ? '#8E1C1C' : '#94A3B8'}
-                    style={styles.leftIcon}
-                  />
-                  <TextInput
-                    ref={passwordRef}
-                    style={styles.input}
-                    placeholder="••••••••"
-                    placeholderTextColor="#94A3B8"
-                    value={password}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      if (messageType === 'error') {
-                        setMessage('');
-                        setMessageType('');
-                      }
-                    }}
-                    secureTextEntry={!showPassword}
-                    onFocus={() => setFocusedInput('pass')}
-                    onBlur={() => setFocusedInput(null)}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    selectionColor="#8E1C1C"
-                    returnKeyType="done"
-                    onSubmitEditing={handleLogin}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword((prev) => !prev)}
-                    style={styles.showBtn}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#64748B"
-                    />
-                  </TouchableOpacity>
-                </Pressable>
-              </View>
-
-              <View style={styles.messageContainer}>
-                <Animated.Text
-                  style={[
-                    styles.messageText,
-                    messageType === 'error' && styles.errorText,
-                    messageType === 'success' && styles.successText,
-                    { opacity: messageOpacity },
-                  ]}
-                >
-                  {message || ' '}
-                </Animated.Text>
-              </View>
-
-              <Animated.View style={{ transform: [{ scale: btnScale }] }}>
-                <Pressable
-                  style={({ pressed }) => [styles.button, pressed && { opacity: 0.95 }]}
-                  onPressIn={handlePressIn}
-                  onPressOut={handlePressOut}
-                  onPress={handleLogin}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.buttonText}>LOGIN</Text>
-                  )}
-                </Pressable>
-              </Animated.View>
-
-              <TouchableOpacity style={styles.forgotBtn} activeOpacity={0.75}>
-                <Text style={styles.forgotText}>Trouble logging in?</Text>
-              </TouchableOpacity>
+              <MaterialCommunityIcons name="flash" size={30} color="#FFFFFF" />
             </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
 
-        <SafeAreaView style={styles.footer}>
-          <Text style={styles.versionText}>System v2.0.4 • Secure Connection</Text>
-        </SafeAreaView>
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>Sign in to continue to your dashboard</Text>
+
+            <FloatingInput
+              label="Username"
+              value={username}
+              onChangeText={(text: string) => {
+                setUsername(text);
+                if (messageType === 'error') {
+                  setMessage('');
+                  setMessageType('');
+                }
+              }}
+              onFocus={() => setFocusedInput('user')}
+              onBlur={() => setFocusedInput(null)}
+              leftIconName="account-outline"
+              focused={focusedInput === 'user'}
+              inputRef={usernameRef}
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+            />
+
+            <FloatingInput
+              label="Password"
+              value={password}
+              onChangeText={(text: string) => {
+                setPassword(text);
+                if (messageType === 'error') {
+                  setMessage('');
+                  setMessageType('');
+                }
+              }}
+              onFocus={() => setFocusedInput('pass')}
+              onBlur={() => setFocusedInput(null)}
+              secureTextEntry={!showPassword}
+              rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              onRightIconPress={() => setShowPassword((prev) => !prev)}
+              leftIconName="lock-outline"
+              focused={focusedInput === 'pass'}
+              inputRef={passwordRef}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+            />
+
+            <View style={styles.messageContainer}>
+              <Animated.Text
+                style={[
+                  styles.messageText,
+                  messageType === 'error' && styles.errorText,
+                  messageType === 'success' && styles.successText,
+                  { opacity: messageOpacity },
+                ]}
+              >
+                {message || ' '}
+              </Animated.Text>
+            </View>
+
+            <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+              <Pressable
+                style={({ pressed }) => [styles.button, pressed && { opacity: 0.95 }]}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.buttonText}>LOGIN</Text>
+                )}
+              </Pressable>
+            </Animated.View>
+
+            <TouchableOpacity style={styles.forgotBtn} activeOpacity={0.75}>
+              <Text style={styles.forgotText}>Trouble logging in?</Text>
+            </TouchableOpacity>
+
+            <View style={styles.spacer} />
+
+            <View style={[styles.footer, { paddingBottom: insets.bottom + 14 }]}>
+              <Text style={styles.versionText}>System v2.0.4 • Secure Connection</Text>
+            </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -359,208 +441,142 @@ export default function LoginScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F6F9',
+    backgroundColor: '#8E1C1C',
   },
   headerBackground: {
-    height: height * 0.34,
     backgroundColor: '#8E1C1C',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    borderBottomLeftRadius: 38,
-    borderBottomRightRadius: 38,
   },
   shape: {
     position: 'absolute',
     borderRadius: 1000,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   shapeOne: {
-    width: 430,
-    height: 430,
-    top: -120,
-    right: -120,
+    width: 360,
+    height: 360,
+    top: -160,
+    right: -110,
   },
   shapeTwo: {
-    width: 240,
-    height: 240,
-    bottom: -70,
+    width: 200,
+    height: 200,
+    bottom: -90,
     left: -60,
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  shapeThree: {
-    width: 130,
-    height: 130,
-    top: 40,
-    left: 35,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
   headerContent: {
     alignItems: 'center',
-    zIndex: 10,
-  },
-  brandWrap: {
-    alignItems: 'center',
-  },
-  logoWrapper: {
-    width: 84,
-    height: 84,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  logoInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   brandMain: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 5,
+    letterSpacing: 4,
   },
   brandSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.74)',
-    letterSpacing: 6,
-    marginTop: 4,
-  },
-  heroText: {
-    marginTop: 12,
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 10.5,
+    color: 'rgba(255,255,255,0.72)',
+    letterSpacing: 5,
+    marginTop: 3,
   },
 
   formArea: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 24,
-  },
-  formSection: {
-    paddingTop: 10,
-    paddingBottom: 10,
+
+  // Bottom-sheet style card, rounded only on top, overlapping the header slightly via the badge.
+  // No shadow here — the card runs flush to the bottom edge of the screen, so a floating
+  // shadow would only create a stray seam line above the footer.
+  card: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 26,
+    paddingTop: BADGE_SIZE / 2 + 14,
+    alignItems: 'stretch',
   },
 
-  industrialWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  accentBar: {
-    width: 30,
-    height: 4,
+  badge: {
+    position: 'absolute',
+    top: -BADGE_SIZE / 2,
+    alignSelf: 'center',
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: BADGE_SIZE / 2,
     backgroundColor: '#8E1C1C',
-    borderRadius: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#F9FAFB',
+    shadowColor: '#8E1C1C',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+    zIndex: 10,
   },
+
   title: {
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 21,
+    fontWeight: '800',
     color: '#111827',
-    marginHorizontal: 15,
-    letterSpacing: 4,
+    textAlign: 'center',
+    marginTop: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: '#8B93A1',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 6,
+    marginBottom: 26,
+  },
+
+  // Floating label underline input
+  floatWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     marginBottom: 22,
-    lineHeight: 20,
   },
-
-  inputBlock: {
-    marginBottom: 14,
+  floatIcon: {
+    marginBottom: 10,
+    marginRight: 10,
   },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    marginLeft: 2,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  labelActive: {
-    color: '#8E1C1C',
-  },
-  pulseDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#8E1C1C',
-    marginLeft: 6,
-  },
-
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  inputActive: {
-    borderColor: '#8E1C1C',
-    borderWidth: 1.5,
-    backgroundColor: '#FFF',
-    shadowOpacity: 0.08,
-    shadowRadius: 15,
-  },
-  leftIcon: {
-    marginRight: 8,
-  },
-  input: {
+  floatInputArea: {
     flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '500',
-    paddingVertical: 0,
-    letterSpacing: 0.4,
+    height: 40,
+    justifyContent: 'flex-end',
   },
-  showBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+  floatLabel: {
+    position: 'absolute',
+    left: 0,
+    fontWeight: '600',
+  },
+  floatInput: {
+    fontSize: 15,
+    color: '#111827',
+    fontWeight: '500',
+    paddingBottom: 6,
+    paddingTop: 0,
+  },
+  floatUnderline: {
+    position: 'absolute',
+    left: 28,
+    right: 0,
+    bottom: 0,
+    borderRadius: 1,
   },
 
   messageContainer: {
-    minHeight: 22,
+    minHeight: 20,
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   messageText: {
-    fontSize: 13,
+    fontSize: 12.5,
     textAlign: 'center',
     fontWeight: '700',
   },
@@ -574,38 +590,41 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#8E1C1C',
     height: 52,
-    borderRadius: 14,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 8,
     shadowColor: '#8E1C1C',
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    elevation: 5,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 1.6,
+    letterSpacing: 2,
   },
   forgotBtn: {
     marginTop: 16,
     alignItems: 'center',
   },
   forgotText: {
-    color: '#6B7280',
-    fontSize: 14,
+    color: '#8B93A1',
+    fontSize: 13.5,
     fontWeight: '600',
   },
+  spacer: {
+    flex: 1,
+    minHeight: 12,
+  },
   footer: {
-    paddingBottom: 18,
     alignItems: 'center',
   },
   versionText: {
-    color: '#9CA3AF',
-    fontSize: 12,
+    color: '#B7BEC9',
+    fontSize: 11,
     fontWeight: '500',
   },
 });

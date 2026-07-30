@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Switch,
   StyleSheet, Animated, ActivityIndicator, Keyboard, Platform, Modal,
-  Dimensions, KeyboardAvoidingView,
+  Dimensions, KeyboardAvoidingView, StatusBar,        // ✅ added StatusBar
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -36,12 +36,20 @@ export const THEME = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const APPS = [
-  { id: 'service',   label: 'Service',   icon: 'toolbox-outline',        color: THEME.info,    bg: THEME.infoLight    },
-  { id: 'project',   label: 'Projects',  icon: 'briefcase-outline',      color: THEME.success, bg: THEME.successLight },
-  { id: 'lead',      label: 'Leads',     icon: 'account-group-outline',  color: '#7C3AED',     bg: '#F5F3FF'          },
-  { id: 'dashboard', label: 'Dashboard', icon: 'view-dashboard-outline', color: THEME.primary, bg: THEME.primaryLight },
-];
+type ProjectAccess = 'full' | 'view' | 'none';
+
+const getProjectAccess = (perms: string[]): ProjectAccess => {
+  if (perms.includes('project')) return 'full';
+  if (perms.includes('project_view')) return 'view';
+  return 'none';
+};
+
+const setProjectAccess = (perms: string[], access: ProjectAccess): string[] => {
+  const base = perms.filter(p => p !== 'project' && p !== 'project_view');
+  if (access === 'full') return [...base, 'project'];
+  if (access === 'view') return [...base, 'project_view'];
+  return base;
+};
 
 const BLANK_FORM = {
   first_name: '', last_name: '', email: '', username: '',
@@ -55,6 +63,12 @@ type Errors = Partial<Record<keyof FormData | 'general', string>>;
 type UniqueStatus = 'idle' | 'checking' | 'ok' | 'taken';
 
 // ─── FeedbackModal ────────────────────────────────────────────────────────────
+const FM_CFG = {
+  success: { bg: '#059669', tint: '#ECFDF5', icon: 'check-bold',  btn: 'Done'   },
+  error:   { bg: '#DC2626', tint: '#FEF2F2', icon: 'close-thick', btn: 'Got it' },
+  info:    { bg: '#2563EB', tint: '#EFF6FF', icon: 'information', btn: 'OK'     },
+} as const;
+
 interface FeedbackModalProps {
   visible: boolean;
   type: 'success' | 'error' | 'info';
@@ -64,99 +78,67 @@ interface FeedbackModalProps {
   autoDismiss?: boolean;
 }
 
-const FeedbackModal: React.FC<FeedbackModalProps> = ({
-  visible, type, title, message, onClose, autoDismiss = false,
-}) => {
-  const scaleAnim = useRef(new Animated.Value(0.82)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, type, title, message, onClose, autoDismiss = false }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  const cardScale  = anim.interpolate({ inputRange: [0, 0.6, 1],      outputRange: [0.85, 1.02, 1] });
+  const cardOpacity = anim.interpolate({ inputRange: [0, 0.3, 1],     outputRange: [0, 1, 1] });
+  const iconScale  = anim.interpolate({ inputRange: [0, 0.6, 0.8, 1], outputRange: [0, 0, 1.15, 1] });
+  const ctOpacity  = anim.interpolate({ inputRange: [0, 0.5, 1],      outputRange: [0, 0, 1] });
+  const ctY        = anim.interpolate({ inputRange: [0, 0.5, 1],      outputRange: [10, 10, 0] });
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 65, friction: 7 }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
+      anim.setValue(0);
+      Animated.spring(anim, { toValue: 1, tension: 55, friction: 8, useNativeDriver: true }).start();
       if (autoDismiss) {
-        const t = setTimeout(onClose, 2200);
+        const t = setTimeout(onClose, 1000);
         return () => clearTimeout(t);
       }
     } else {
-      scaleAnim.setValue(0.82);
-      opacityAnim.setValue(0);
+      anim.setValue(0);
     }
   }, [visible]);
 
-  const cfg = {
-    success: { iconBg: THEME.successLight, iconColor: THEME.success, icon: 'check-circle', btnColor: THEME.success, bar: THEME.success },
-    error:   { iconBg: THEME.dangerLight,  iconColor: THEME.danger,  icon: 'close-circle', btnColor: THEME.danger,  bar: THEME.danger  },
-    info:    { iconBg: THEME.infoLight,    iconColor: THEME.info,    icon: 'information',  btnColor: THEME.info,    bar: THEME.info    },
-  }[type];
-
+  const cfg = FM_CFG[type];
   if (!visible) return null;
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={mStyles.overlay}>
-        <Animated.View style={[mStyles.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
-          <View style={[mStyles.bar, { backgroundColor: cfg.bar }]} />
-          <View style={[mStyles.iconBubble, { backgroundColor: cfg.iconBg }]}>
-            <MaterialCommunityIcons name={cfg.icon as any} size={44} color={cfg.iconColor} />
+      <View style={fmStyles.overlay}>
+        <Animated.View style={[fmStyles.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}>
+          <View style={fmStyles.iconZone}>
+            <Animated.View style={[fmStyles.iconBg, { backgroundColor: cfg.tint, transform: [{ scale: iconScale }] }]}>
+              <MaterialCommunityIcons name={cfg.icon as any} size={34} color={cfg.bg} />
+            </Animated.View>
           </View>
-          <Text style={mStyles.title}>{title}</Text>
-          <Text style={mStyles.message}>{message}</Text>
-          {!autoDismiss ? (
-            <TouchableOpacity style={[mStyles.btn, { backgroundColor: cfg.btnColor }]} onPress={onClose} activeOpacity={0.85}>
-              <Text style={mStyles.btnText}>Got it</Text>
+          <Animated.View style={[fmStyles.textZone, { opacity: ctOpacity, transform: [{ translateY: ctY }] }]}>
+            <Text style={fmStyles.title}>{title}</Text>
+            <Text style={fmStyles.message}>{message}</Text>
+          </Animated.View>
+          <View style={fmStyles.sep} />
+          <Animated.View style={{ width: '100%', opacity: ctOpacity }}>
+            <TouchableOpacity style={fmStyles.btn} onPress={onClose} activeOpacity={0.75}>
+              <Text style={[fmStyles.btnText, { color: cfg.bg }]}>{cfg.btn}</Text>
             </TouchableOpacity>
-          ) : (
-            <View style={mStyles.dismissRow}>
-              <ActivityIndicator size="small" color={cfg.iconColor} />
-              <Text style={[mStyles.dismissText, { color: cfg.iconColor }]}>
-                {type === 'success' ? 'Going back…' : 'Please wait…'}
-              </Text>
-            </View>
-          )}
+          </Animated.View>
         </Animated.View>
       </View>
     </Modal>
   );
 };
 
-const mStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(10, 18, 36, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    alignItems: 'center',
-    paddingBottom: 28,
-    paddingHorizontal: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 20,
-  },
-  bar: { width: '100%', height: 5, marginBottom: 28 },
-  iconBubble: {
-    width: 88, height: 88, borderRadius: 44,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
-  title: { fontSize: 21, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 10, letterSpacing: 0.2 },
-  message: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22, marginBottom: 26 },
-  btn: { width: '100%', paddingVertical: 15, borderRadius: 16, alignItems: 'center' },
-  btnText: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-  dismissRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  dismissText: { fontSize: 14, fontWeight: '600' },
+const fmStyles = StyleSheet.create({
+  overlay:  { flex: 1, backgroundColor: 'rgba(10,18,36,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  card:     { width: '100%', backgroundColor: '#FFF', borderRadius: 24, alignItems: 'center', overflow: 'hidden', elevation: 18, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } },
+  iconZone: { paddingTop: 32, paddingBottom: 16, alignItems: 'center' },
+  iconBg:   { width: 74, height: 74, borderRadius: 37, alignItems: 'center', justifyContent: 'center' },
+  textZone: { paddingHorizontal: 24, alignItems: 'center', paddingBottom: 20 },
+  title:    { fontSize: 19, fontWeight: '800', color: '#0F172A', marginBottom: 6, textAlign: 'center' },
+  message:  { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20 },
+  sep:      { width: '100%', height: 1, backgroundColor: '#F1F5F9' },
+  btn:      { width: '100%', paddingVertical: 17, alignItems: 'center', backgroundColor: '#FFF' },
+  btnText:  { fontSize: 15, fontWeight: '700' },
 });
 
 // ─── Form Field ───────────────────────────────────────────────────────────────
@@ -285,28 +267,123 @@ const toggleStyles = StyleSheet.create({
   desc: { fontSize: 10, color: THEME.muted, marginTop: 1 },
 });
 
-// ─── App Card ─────────────────────────────────────────────────────────────────
+// ─── Unified App Access Modal (centered dialog — all apps together) ────────────
+const TOGGLE_APPS = [
+  { id: 'service',   label: 'Service',   icon: 'toolbox-outline',        color: THEME.info,    bg: THEME.infoLight    },
+  { id: 'lead',      label: 'Leads',     icon: 'account-group-outline',  color: '#7C3AED',     bg: '#F5F3FF'          },
+  { id: 'dashboard', label: 'Dashboard', icon: 'view-dashboard-outline', color: THEME.primary, bg: THEME.primaryLight },
+];
+
+// ─── AppCard (simple toggle — Service / Leads / Dashboard) ───────────────────
 const AppCard = ({ app, selected, onPress }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    activeOpacity={0.8}
-    style={[appStyles.card, selected && { borderColor: app.color, backgroundColor: app.bg }]}
-  >
-    <View style={[appStyles.iconBox, { backgroundColor: selected ? app.color + '25' : '#F1F5F9' }]}>
-      <MaterialCommunityIcons name={app.icon} size={16} color={selected ? app.color : THEME.muted} />
+  <TouchableOpacity onPress={onPress} activeOpacity={0.8}
+    style={[acStyles.card, selected && { borderColor: app.color, backgroundColor: app.bg }]}>
+    <View style={[acStyles.iconBox, { backgroundColor: selected ? app.color + '25' : '#F1F5F9' }]}>
+      <MaterialCommunityIcons name={app.icon as any} size={16} color={selected ? app.color : THEME.muted} />
     </View>
-    <Text style={[appStyles.label, selected && { color: app.color, fontWeight: '700' }]}>{app.label}</Text>
-    <View style={[appStyles.check, selected && { backgroundColor: app.color }]}>
-      {selected && <MaterialCommunityIcons name="check" size={8} color="#FFF" />}
+    <Text style={[acStyles.label, selected && { color: app.color, fontWeight: '700' }]}>{app.label}</Text>
+    <View style={[acStyles.check, selected && { backgroundColor: app.color }]}>
+      {selected && <MaterialCommunityIcons name="check" size={9} color="#FFF" />}
     </View>
   </TouchableOpacity>
 );
 
-const appStyles = StyleSheet.create({
+const acStyles = StyleSheet.create({
   card: { width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, borderRadius: 12, borderWidth: 1.5, borderColor: THEME.border, backgroundColor: '#FAFBFC' },
   iconBox: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   label: { flex: 1, fontSize: 12, fontWeight: '600', color: THEME.textSecondary },
   check: { width: 14, height: 14, borderRadius: 7, backgroundColor: THEME.border, alignItems: 'center', justifyContent: 'center' },
+});
+
+// ─── ProjectCard (shows access level, opens picker on tap) ───────────────────
+const PROJECT_CFG: Record<ProjectAccess, { color: string; bg: string; label: string }> = {
+  full: { color: THEME.success, bg: THEME.successLight, label: 'Full' },
+  view: { color: THEME.info,    bg: THEME.infoLight,    label: 'View Only' },
+  none: { color: THEME.muted,   bg: '#F1F5F9',          label: 'No Access' },
+};
+
+const ProjectCard = ({ access, onPress }: { access: ProjectAccess; onPress: () => void }) => {
+  const cfg = PROJECT_CFG[access];
+  const active = access !== 'none';
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}
+      style={[acStyles.card, active && { borderColor: cfg.color, backgroundColor: cfg.bg }]}>
+      <View style={[acStyles.iconBox, { backgroundColor: active ? cfg.color + '25' : '#F1F5F9' }]}>
+        <MaterialCommunityIcons name="briefcase-outline" size={16} color={active ? cfg.color : THEME.muted} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 12, fontWeight: active ? '700' : '600', color: active ? cfg.color : THEME.textSecondary }}>Projects</Text>
+        {active && <Text style={{ fontSize: 9, color: cfg.color, fontWeight: '600', marginTop: 1 }}>{cfg.label}</Text>}
+      </View>
+      <MaterialCommunityIcons name="chevron-down" size={12} color={active ? cfg.color : THEME.border} />
+    </TouchableOpacity>
+  );
+};
+
+// ─── ProjectPickerModal (small center dialog) ─────────────────────────────────
+const PPM_OPTS = [
+  { key: 'full' as ProjectAccess, label: 'Full Access', desc: 'Can view & manage all projects', icon: 'briefcase-check-outline', color: THEME.success, bg: THEME.successLight },
+  { key: 'view' as ProjectAccess, label: 'View Only',   desc: 'Can view but not edit',          icon: 'eye-outline',            color: THEME.info,    bg: THEME.infoLight    },
+  { key: 'none' as ProjectAccess, label: 'No Access',   desc: 'No access to projects',          icon: 'briefcase-off-outline',  color: THEME.muted,   bg: '#F1F5F9'          },
+];
+
+const ProjectPickerModal = ({ visible, current, onSelect, onClose }: {
+  visible: boolean; current: ProjectAccess; onSelect: (v: ProjectAccess) => void; onClose: () => void;
+}) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <TouchableOpacity style={ppmStyles.overlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity activeOpacity={1} style={ppmStyles.dialog} onPress={() => {}}>
+        <View style={ppmStyles.header}>
+          <View style={ppmStyles.hIcon}>
+            <MaterialCommunityIcons name="briefcase-outline" size={16} color={THEME.success} />
+          </View>
+          <Text style={ppmStyles.title}>Project Access</Text>
+          <TouchableOpacity style={ppmStyles.closeBtn} onPress={onClose}>
+            <MaterialCommunityIcons name="close" size={15} color={THEME.muted} />
+          </TouchableOpacity>
+        </View>
+        <View style={ppmStyles.sep} />
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, gap: 8 }}>
+          {PPM_OPTS.map(opt => {
+            const active = current === opt.key;
+            return (
+              <TouchableOpacity key={opt.key}
+                style={[ppmStyles.option, active && { backgroundColor: opt.bg, borderColor: opt.color }]}
+                onPress={() => { onSelect(opt.key); onClose(); }} activeOpacity={0.75}>
+                <View style={[ppmStyles.optIcon, { backgroundColor: active ? opt.color + '22' : '#F1F5F9' }]}>
+                  <MaterialCommunityIcons name={opt.icon as any} size={18} color={active ? opt.color : THEME.muted} />
+                </View>
+                <View style={ppmStyles.optText}>
+                  <Text style={[ppmStyles.optLabel, active && { color: opt.color }]}>{opt.label}</Text>
+                  <Text style={ppmStyles.optDesc}>{opt.desc}</Text>
+                </View>
+                <View style={[ppmStyles.radio, active && { borderColor: opt.color }]}>
+                  {active && <View style={[ppmStyles.radioDot, { backgroundColor: opt.color }]} />}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  </Modal>
+);
+
+const ppmStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  dialog: { width: '100%', backgroundColor: '#FFF', borderRadius: 20, overflow: 'hidden', elevation: 24, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  hIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: THEME.successLight, alignItems: 'center', justifyContent: 'center' },
+  title: { flex: 1, fontSize: 15, fontWeight: '800', color: THEME.text },
+  closeBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  sep: { height: 1, backgroundColor: THEME.borderLight },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1.5, borderColor: THEME.border, backgroundColor: '#FAFBFC' },
+  optIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  optText: { flex: 1 },
+  optLabel: { fontSize: 13, fontWeight: '700', color: THEME.text, marginBottom: 1 },
+  optDesc:  { fontSize: 11, color: THEME.muted },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: THEME.border, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 9, height: 9, borderRadius: 5 },
 });
 
 // ─── Password Strength ────────────────────────────────────────────────────────
@@ -386,6 +463,7 @@ export default function UserFormScreen({
   const [errors, setErrors] = useState<Errors>({});
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState<UniqueStatus>('idle');
   const [emailStatus, setEmailStatus] = useState<UniqueStatus>('idle');
 
@@ -410,6 +488,14 @@ export default function UserFormScreen({
   const set = (key: keyof FormData) => (val: any) =>
     setForm(prev => ({ ...prev, [key]: val }));
 
+  const toggleApp = (id: string) =>
+    setForm(prev => ({
+      ...prev,
+      app_permissions: prev.app_permissions.includes(id)
+        ? prev.app_permissions.filter(p => p !== id)
+        : [...prev.app_permissions, id],
+    }));
+
   const showModal = (
     type: 'success' | 'error' | 'info',
     title: string,
@@ -418,7 +504,9 @@ export default function UserFormScreen({
   ) => setFeedbackModal({ visible: true, type, title, message, autoDismiss });
 
   const closeModal = () => {
+    const wasSuccess = feedbackModal.type === 'success' && feedbackModal.autoDismiss;
     setFeedbackModal(p => ({ ...p, visible: false }));
+    if (wasSuccess) navigation.goBack();
   };
 
   const checkUnique = useCallback(async (field: 'username' | 'email', value: string) => {
@@ -518,10 +606,6 @@ export default function UserFormScreen({
           : 'The new user account has been set up successfully.',
         true,
       );
-      setTimeout(() => {
-        setFeedbackModal(p => ({ ...p, visible: false }));
-        navigation.goBack();
-      }, 2400);
     } else {
       if (result.errors) {
         setErrors(result.errors);
@@ -535,12 +619,7 @@ export default function UserFormScreen({
     }
   };
 
-  const toggleApp = (id: string) =>
-    set('app_permissions')(
-      form.app_permissions.includes(id)
-        ? form.app_permissions.filter(a => a !== id)
-        : [...form.app_permissions, id]
-    );
+  const projectAccess = getProjectAccess(form.app_permissions);
 
   const avatarLetter = isEdit
     ? (initialData?.first_name?.[0] || initialData?.username?.[0] || 'U').toUpperCase()
@@ -550,12 +629,10 @@ export default function UserFormScreen({
     navigation.setOptions({ gestureEnabled: false });
   }, [navigation]);
 
-  const assignedAppsCount = APPS.filter(app =>
-    form.app_permissions.includes(app.id)
-  ).length;
-
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+      <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
+
       <FeedbackModal
         visible={feedbackModal.visible}
         type={feedbackModal.type}
@@ -563,6 +640,12 @@ export default function UserFormScreen({
         message={feedbackModal.message}
         autoDismiss={feedbackModal.autoDismiss}
         onClose={closeModal}
+      />
+      <ProjectPickerModal
+        visible={showProjectPicker}
+        current={projectAccess}
+        onSelect={a => set('app_permissions')(setProjectAccess(form.app_permissions, a))}
+        onClose={() => setShowProjectPicker(false)}
       />
 
       <SafeAreaView style={styles.root} edges={['top']}>
@@ -595,9 +678,9 @@ export default function UserFormScreen({
         )}
 
         <KeyboardAvoidingView
-          style={styles.keyboardWrap}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+  style={[styles.keyboardWrap, { backgroundColor: THEME.bg, marginTop: -24 ,paddingTop: 29}]}
+  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+>
           <ScrollView
             ref={scrollRef}
             style={styles.scroll}
@@ -735,7 +818,7 @@ export default function UserFormScreen({
 
             <SectionLabel icon="apps" title="Assign App Access" />
             <View style={styles.appsGrid}>
-              {APPS.map(app => (
+              {TOGGLE_APPS.map(app => (
                 <AppCard
                   key={app.id}
                   app={app}
@@ -743,16 +826,11 @@ export default function UserFormScreen({
                   onPress={() => toggleApp(app.id)}
                 />
               ))}
+              <ProjectCard
+                access={projectAccess}
+                onPress={() => setShowProjectPicker(true)}
+              />
             </View>
-
-            {assignedAppsCount > 0 && (
-              <View style={styles.appsSummary}>
-                <MaterialCommunityIcons name="check-circle-outline" size={12} color={THEME.success} />
-                <Text style={styles.appsSummaryText}>
-                  {assignedAppsCount} app{assignedAppsCount > 1 ? 's' : ''} assigned
-                </Text>
-              </View>
-            )}
           </ScrollView>
 
           {/* Fixed Footer (pinned at bottom) */}
@@ -790,8 +868,8 @@ export default function UserFormScreen({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: THEME.bg },
-  topBar: {
+ root: { flex: 1, backgroundColor: 'transparent' },
+ topBar: {
     backgroundColor: THEME.primary,
     flexDirection: 'row',
     alignItems: 'center',
@@ -800,6 +878,12 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    zIndex: 1,
+    elevation: 4,
+    shadowColor: THEME.primary,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   backBtn: {
     width: 34, height: 34, borderRadius: 10,
@@ -841,9 +925,7 @@ const styles = StyleSheet.create({
     borderColor: THEME.border, paddingHorizontal: 12, marginBottom: 18, elevation: 1,
   },
   sep: { height: 1, backgroundColor: THEME.border },
-  appsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 },
-  appsSummary: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  appsSummaryText: { fontSize: 11, color: THEME.success, fontWeight: '700' },
+  appsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
 
   // Fixed footer
   fixedFooter: {

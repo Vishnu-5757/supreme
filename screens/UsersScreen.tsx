@@ -61,38 +61,112 @@ const getInitials = (name: string, username: string) => {
   return username ? username.substring(0, 2).toUpperCase() : 'U';
 };
 
-// ─── Toast ─────────────────────────────────────────────────────────────────────
-const Toast = ({ message, type, visible, onHide }: any) => {
-  const translateY = useRef(new Animated.Value(-100)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+// ─── UserDeleteConfirmModal ────────────────────────────────────────────────────
+const UserDeleteConfirmModal = ({ visible, username, onCancel, onConfirm, loading }: any) => (
+  <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
+    <View style={dmStyles.overlay}>
+      <View style={dmStyles.card}>
+        <View style={dmStyles.iconWrap}>
+          <MaterialCommunityIcons name="delete-alert-outline" size={36} color={THEME.danger} />
+        </View>
+        <Text style={dmStyles.title}>Delete User?</Text>
+        <Text style={dmStyles.msg}>
+          Are you sure you want to delete{' '}
+          <Text style={{ fontWeight: '800', color: THEME.text }}>"{username}"</Text>?
+          {'\n'}This action cannot be undone.
+        </Text>
+        <View style={dmStyles.btns}>
+          <TouchableOpacity style={dmStyles.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+            <Text style={dmStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[dmStyles.deleteBtn, loading && { opacity: 0.65 }]} onPress={onConfirm} disabled={loading} activeOpacity={0.85}>
+            {loading
+              ? <ActivityIndicator size="small" color="#FFF" />
+              : <><MaterialCommunityIcons name="delete" size={16} color="#FFF" /><Text style={dmStyles.deleteText}>Yes, Delete</Text></>
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+const dmStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(10,18,36,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 },
+  card:    { width: '100%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center', elevation: 18, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } },
+  iconWrap:   { width: 72, height: 72, borderRadius: 36, backgroundColor: THEME.dangerLight, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  title:      { fontSize: 20, fontWeight: '800', color: THEME.text, marginBottom: 8 },
+  msg:        { fontSize: 14, color: THEME.muted, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  btns:       { flexDirection: 'row', gap: 12, width: '100%' },
+  cancelBtn:  { flex: 1, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5, borderColor: THEME.border, alignItems: 'center', backgroundColor: '#FAFBFC' },
+  cancelText: { fontSize: 14, fontWeight: '700', color: THEME.textSecondary },
+  deleteBtn:  { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: THEME.danger, paddingVertical: 13, borderRadius: 14, elevation: 3, shadowColor: THEME.danger, shadowOpacity: 0.3, shadowRadius: 8 },
+  deleteText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
+});
+
+// ─── UserFeedbackModal ─────────────────────────────────────────────────────────
+const UFM_CFG = {
+  success: { bg: '#059669', tint: '#ECFDF5', icon: 'check-bold',  btn: 'Done'   },
+  error:   { bg: '#DC2626', tint: '#FEF2F2', icon: 'close-thick', btn: 'Got it' },
+} as const;
+
+const UserFeedbackModal = ({ visible, type, title, message, onClose }: any) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  const cardScale  = anim.interpolate({ inputRange: [0, 0.6, 1],      outputRange: [0.85, 1.02, 1] });
+  const cardOpacity = anim.interpolate({ inputRange: [0, 0.3, 1],     outputRange: [0, 1, 1] });
+  const iconScale  = anim.interpolate({ inputRange: [0, 0.6, 0.8, 1], outputRange: [0, 0, 1.15, 1] });
+  const ctOpacity  = anim.interpolate({ inputRange: [0, 0.5, 1],      outputRange: [0, 0, 1] });
+  const ctY        = anim.interpolate({ inputRange: [0, 0.5, 1],      outputRange: [10, 10, 0] });
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 7 }),
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start();
-      const timer = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(translateY, { toValue: -100, duration: 300, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        ]).start(onHide);
-      }, 3000);
-      return () => clearTimeout(timer);
+      anim.setValue(0);
+      Animated.spring(anim, { toValue: 1, tension: 55, friction: 8, useNativeDriver: true }).start();
+    } else {
+      anim.setValue(0);
     }
   }, [visible]);
 
+  const cfg = UFM_CFG[type as 'success' | 'error'] ?? UFM_CFG.error;
   if (!visible) return null;
-  const bgColor = type === 'success' ? THEME.success : type === 'error' ? THEME.danger : THEME.info;
-  const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'information';
 
   return (
-    <Animated.View style={[styles.toastContainer, { transform: [{ translateY }], opacity, backgroundColor: bgColor }]}>
-      <MaterialCommunityIcons name={icon} size={20} color="#FFF" />
-      <Text style={styles.toastText}>{message}</Text>
-    </Animated.View>
+    <Modal transparent visible={visible} animationType="none" statusBarTranslucent onRequestClose={onClose}>
+      <View style={ufmStyles.overlay}>
+        <Animated.View style={[ufmStyles.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}>
+          <View style={ufmStyles.iconZone}>
+            <Animated.View style={[ufmStyles.iconBg, { backgroundColor: cfg.tint, transform: [{ scale: iconScale }] }]}>
+              <MaterialCommunityIcons name={cfg.icon as any} size={34} color={cfg.bg} />
+            </Animated.View>
+          </View>
+          <Animated.View style={[ufmStyles.textZone, { opacity: ctOpacity, transform: [{ translateY: ctY }] }]}>
+            <Text style={ufmStyles.title}>{title}</Text>
+            <Text style={ufmStyles.message}>{message}</Text>
+          </Animated.View>
+          <View style={ufmStyles.sep} />
+          <Animated.View style={{ width: '100%', opacity: ctOpacity }}>
+            <TouchableOpacity style={ufmStyles.btn} onPress={onClose} activeOpacity={0.75}>
+              <Text style={[ufmStyles.btnText, { color: cfg.bg }]}>{cfg.btn}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 };
+
+const ufmStyles = StyleSheet.create({
+  overlay:  { flex: 1, backgroundColor: 'rgba(10,18,36,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  card:     { width: '100%', backgroundColor: '#FFF', borderRadius: 24, alignItems: 'center', overflow: 'hidden', elevation: 18, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } },
+  iconZone: { paddingTop: 32, paddingBottom: 16, alignItems: 'center' },
+  iconBg:   { width: 74, height: 74, borderRadius: 37, alignItems: 'center', justifyContent: 'center' },
+  textZone: { paddingHorizontal: 24, alignItems: 'center', paddingBottom: 20 },
+  title:    { fontSize: 19, fontWeight: '800', color: '#0F172A', marginBottom: 6, textAlign: 'center' },
+  message:  { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20 },
+  sep:      { width: '100%', height: 1, backgroundColor: '#F1F5F9' },
+  btn:      { width: '100%', paddingVertical: 17, alignItems: 'center', backgroundColor: '#FFF' },
+  btnText:  { fontSize: 15, fontWeight: '700' },
+});
 
 // ─── User Card (Compact, Lead‑style) ──────────────────────────────────────────
 // ─── User Card (Branch name moved to right side) ──────────────────────────────
@@ -183,6 +257,91 @@ const UserCard = ({ user, index, onEdit, onDelete }: any) => {
   );
 };
 
+// ── Loading Screen ───────────────────────────────────────────────
+const LoadingScreen = () => {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const spin = useRef(new Animated.Value(0)).current;
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const shimmer1 = useRef(new Animated.Value(0.4)).current;
+  const shimmer2 = useRef(new Animated.Value(0.4)).current;
+  const shimmer3 = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.12, duration: 700, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+    ])).start();
+    Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 1200, useNativeDriver: true })
+    ).start();
+    const makeShimmer = (anim: Animated.Value, delay: number) =>
+      Animated.loop(Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ]));
+    makeShimmer(shimmer1, 0).start();
+    makeShimmer(shimmer2, 200).start();
+    makeShimmer(shimmer3, 400).start();
+  }, []);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  return (
+    <Animated.View style={[loadStyles.wrapper, { opacity: fadeIn }]}>
+      <View style={loadStyles.body}>
+        <View style={loadStyles.spinnerWrap}>
+          <Animated.View style={[loadStyles.spinRing, { transform: [{ rotate }] }]} />
+          <Animated.View style={[loadStyles.iconCircle, { transform: [{ scale: pulse }] }]}>
+            <MaterialCommunityIcons name="account-group-outline" size={30} color="#FFF" />
+          </Animated.View>
+        </View>
+        <Text style={loadStyles.title}>Loading Users</Text>
+        <Text style={loadStyles.subtitle}>Fetching your records…</Text>
+        {([shimmer1, shimmer2, shimmer3] as Animated.Value[]).map((anim, i) => (
+          <Animated.View key={i} style={[loadStyles.skeletonCard, { opacity: anim }]}>
+            <View style={loadStyles.skeletonAvatar} />
+            <View style={loadStyles.skeletonContent}>
+              <View style={[loadStyles.skeletonLine, { width: '65%', marginBottom: 8 }]} />
+              <View style={[loadStyles.skeletonLine, { width: '40%', height: 8 }]} />
+            </View>
+            <View style={loadStyles.skeletonBadge} />
+          </Animated.View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
+
+const loadStyles = StyleSheet.create({
+  wrapper: { flex: 1, backgroundColor: THEME.bg },
+  body: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 48 },
+  spinnerWrap: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  spinRing: {
+    position: 'absolute', width: 90, height: 90, borderRadius: 45,
+    borderWidth: 3, borderColor: THEME.primary,
+    borderTopColor: 'transparent', borderRightColor: THEME.primaryLight,
+  },
+  iconCircle: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.primary,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: THEME.primary, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 8,
+  },
+  title: { fontSize: 20, fontWeight: '800', color: THEME.text, marginBottom: 6 },
+  subtitle: { fontSize: 13, color: THEME.muted, marginBottom: 32 },
+  skeletonCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF',
+    borderRadius: 14, padding: 14, marginBottom: 10, width: '100%',
+    borderWidth: 1, borderColor: THEME.borderLight, elevation: 1,
+  },
+  skeletonAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: THEME.primaryLight, marginRight: 12 },
+  skeletonContent: { flex: 1 },
+  skeletonLine: { height: 10, borderRadius: 6, backgroundColor: THEME.borderLight },
+  skeletonBadge: { width: 52, height: 22, borderRadius: 6, backgroundColor: THEME.primaryLight },
+});
+
 // ─── Main Users Screen ────────────────────────────────────────────────────────
 export default function UsersScreen({ navigation }: any) {
   const { apiRequest } = useAuthApi();
@@ -194,10 +353,9 @@ export default function UsersScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteFeedback, setDeleteFeedback] = useState({ visible: false, type: 'success' as 'success' | 'error', title: '', message: '' });
 
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
@@ -209,9 +367,6 @@ export default function UsersScreen({ navigation }: any) {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, []);
-
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') =>
-    setToast({ visible: true, message, type });
 
  const fetchUsers = async (page: number = 1, shouldAppend: boolean = false) => {
   if (!shouldAppend) setLoading(true);
@@ -236,7 +391,7 @@ export default function UsersScreen({ navigation }: any) {
     setHasNextPage(data.current_page < data.num_pages);   // ✅ use num_pages
     setCurrentPage(page);
   } catch {
-    showToast('Could not load users', 'error');
+    // load error — non-blocking, no modal needed
   } finally {
     setLoading(false);
     setRefreshing(false);
@@ -269,23 +424,25 @@ export default function UsersScreen({ navigation }: any) {
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
-    setSubmitting(true);
+  const confirmDeleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      const res = await apiRequest(`${API_BASE_URL}/users/api/users/${selectedUser.id}/`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        showToast(data.error || 'Deletion failed', 'error');
-        return;
+      const res = await apiRequest(`${API_BASE_URL}/users/api/users/${deleteTarget.id}/`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      setDeleteLoading(false);
+      if (res.ok) {
+        setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
+        setTotalCount(c => c - 1);
+        setDeleteFeedback({ visible: true, type: 'success', title: 'Deleted!', message: 'The user has been removed successfully.' });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteFeedback({ visible: true, type: 'error', title: 'Failed', message: data.error || 'Could not delete the user. Please try again.' });
       }
-      showToast('User deleted', 'success');
-      setDeleteModalVisible(false);
-      fetchUsers(1, false);
     } catch {
-      showToast('Network error', 'error');
-    } finally {
-      setSubmitting(false);
+      setDeleteTarget(null);
+      setDeleteLoading(false);
+      setDeleteFeedback({ visible: true, type: 'error', title: 'Error', message: 'Something went wrong. Please try again.' });
     }
   };
 
@@ -311,25 +468,33 @@ export default function UsersScreen({ navigation }: any) {
 
   if (loading && !refreshing && users.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
-        <View style={styles.centerLoader}>
-          <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.loaderText}>Loading users…</Text>
-        </View>
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <LoadingScreen />
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
+    <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={() => setToast(t => ({ ...t, visible: false }))}
+      <UserDeleteConfirmModal
+        visible={!!deleteTarget}
+        username={deleteTarget?.username || ''}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteUser}
+        loading={deleteLoading}
+      />
+      <UserFeedbackModal
+        visible={deleteFeedback.visible}
+        type={deleteFeedback.type}
+        title={deleteFeedback.title}
+        message={deleteFeedback.message}
+        onClose={() => setDeleteFeedback(f => ({ ...f, visible: false }))}
       />
 
       <Animated.View style={[styles.screenWrap, { opacity: fadeAnim }]}>
@@ -407,7 +572,7 @@ export default function UsersScreen({ navigation }: any) {
               user={item}
               index={index}
               onEdit={(u: any) => navigation.navigate('EditUser', { user: u })}
-              onDelete={(u: any) => { setSelectedUser(u); setDeleteModalVisible(true); }}
+              onDelete={(u: any) => setDeleteTarget(u)}
             />
           )}
           contentContainerStyle={styles.listContent}
@@ -435,45 +600,6 @@ export default function UsersScreen({ navigation }: any) {
           ListFooterComponent={renderFooter}
           scrollEventThrottle={16}
         />
-
-        {/* ── DELETE MODAL ── */}
-        <Modal
-          visible={deleteModalVisible}
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-          onRequestClose={() => setDeleteModalVisible(false)}
-        >
-          <View style={styles.centerModalRoot}>
-            <Pressable style={styles.modalBackdropFull} onPress={() => setDeleteModalVisible(false)} />
-            <View style={styles.deleteModal}>
-              <View style={styles.deleteIconWrap}>
-                <MaterialCommunityIcons name="delete-alert-outline" size={44} color={THEME.danger} />
-              </View>
-              <Text style={styles.deleteTitle}>Delete User?</Text>
-              <Text style={styles.deleteMsg}>
-                Are you sure you want to delete{' '}
-                <Text style={{ fontWeight: '700', color: THEME.text }}>"{selectedUser?.username}"</Text>?
-                {'\n'}This action cannot be undone.
-              </Text>
-              <View style={styles.deleteBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setDeleteModalVisible(false)}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmBtn} onPress={handleDeleteUser} disabled={submitting}>
-                  {submitting ? (
-                    <ActivityIndicator color="#FFF" size="small" />
-                  ) : (
-                    <>
-                      <MaterialCommunityIcons name="delete" size={16} color="#FFF" />
-                      <Text style={styles.confirmText}>Delete</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
 
         {/* ── ROLE DROPDOWN ── */}
         <Modal
@@ -515,13 +641,14 @@ export default function UsersScreen({ navigation }: any) {
 
       </Animated.View>
     </SafeAreaView>
+    </View>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.bg },
-  screenWrap: { flex: 1 },
+  container: { flex: 1, backgroundColor: THEME.primary },
+  screenWrap: { flex: 1, backgroundColor: THEME.bg },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loaderText: { fontSize: 14, color: THEME.muted, fontWeight: '500' },
 
@@ -687,42 +814,9 @@ const styles = StyleSheet.create({
   },
   footerLoaderText: { fontSize: 13, color: THEME.muted, fontWeight: '500' },
 
-  // ── Toast ──
-  toastContainer: {
-    position: 'absolute', top: 16, left: 20, right: 20,
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderRadius: 14, elevation: 8, zIndex: 9999,
-  },
-  toastText: { color: '#FFF', fontSize: 14, fontWeight: '600', flex: 1 },
-
   // ── Modals ──
   centerModalRoot: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   modalBackdropFull: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  deleteModal: {
-    width: '100%', maxWidth: 360, backgroundColor: '#FFF',
-    borderRadius: 24, padding: 24, alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 24, elevation: 20,
-  },
-  deleteIconWrap: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: THEME.dangerLight, alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
-  deleteTitle: { fontSize: 20, fontWeight: '800', color: THEME.text, marginBottom: 8 },
-  deleteMsg: { fontSize: 14, color: THEME.muted, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  deleteBtns: { flexDirection: 'row', gap: 12, width: '100%' },
-  cancelBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 14,
-    borderWidth: 1.5, borderColor: THEME.border,
-    alignItems: 'center', backgroundColor: '#FAFBFC',
-  },
-  cancelText: { fontSize: 14, fontWeight: '700', color: THEME.textSecondary },
-  confirmBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    backgroundColor: THEME.danger, paddingVertical: 13, borderRadius: 14,
-    elevation: 3, shadowColor: THEME.danger, shadowOpacity: 0.3, shadowRadius: 8,
-  },
-  confirmText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
 
   dropdownCard: {
     backgroundColor: '#FFF', borderRadius: 18,

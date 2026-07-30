@@ -1,4 +1,4 @@
-// AddEditProjectScreen.tsx – Full updated version with API integration + image fix
+// AddEditProjectScreen.tsx – Full updated version with Category selector
 import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
@@ -17,6 +17,7 @@ import {
     Alert,
     Easing,
     Image,
+    StatusBar,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -55,6 +56,12 @@ const THEME = {
 };
 
 // ─── FeedbackModal ────────────────────────────────────────────────────
+const FM_CFG = {
+    success: { bg: '#059669', tint: '#ECFDF5', icon: 'check-bold',  btn: 'Done'   },
+    error:   { bg: '#DC2626', tint: '#FEF2F2', icon: 'close-thick', btn: 'Got it' },
+    info:    { bg: '#2563EB', tint: '#EFF6FF', icon: 'information', btn: 'OK'     },
+} as const;
+
 interface FeedbackModalProps {
     visible: boolean;
     type: 'success' | 'error' | 'info';
@@ -67,55 +74,56 @@ interface FeedbackModalProps {
 const FeedbackModal: React.FC<FeedbackModalProps> = ({
     visible, type, title, message, onClose, autoDismiss = false,
 }) => {
-    const scaleAnim = useRef(new Animated.Value(0.82)).current;
-    const opacityAnim = useRef(new Animated.Value(0)).current;
+    const anim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         if (visible) {
-            Animated.parallel([
-                Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 65, friction: 7 }),
-                Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-            ]).start();
+            anim.setValue(0);
+            Animated.spring(anim, { toValue: 1, tension: 70, friction: 11, useNativeDriver: true }).start();
             if (autoDismiss) {
-                const t = setTimeout(onClose, 2200);
+                const delay = type === 'success' ? 1000 : 2000;
+                const t = setTimeout(onClose, delay);
                 return () => clearTimeout(t);
             }
         } else {
-            scaleAnim.setValue(0.82);
-            opacityAnim.setValue(0);
+            anim.setValue(0);
         }
     }, [visible]);
 
-    const cfg = {
-        success: { iconBg: THEME.successLt, iconColor: THEME.success, icon: 'check-circle', btnColor: THEME.success, bar: THEME.success },
-        error: { iconBg: THEME.dangerLt, iconColor: THEME.danger, icon: 'close-circle', btnColor: THEME.danger, bar: THEME.danger },
-        info: { iconBg: THEME.infoLt, iconColor: THEME.info, icon: 'information', btnColor: THEME.info, bar: THEME.info },
-    }[type];
+    const cfg = FM_CFG[type];
+
+    const cardScale   = anim.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] });
+    const cardOpacity = anim.interpolate({ inputRange: [0, 0.4], outputRange: [0, 1], extrapolate: 'clamp' });
+    const iconScale   = anim.interpolate({ inputRange: [0, 0.6, 0.82, 1], outputRange: [0, 1.15, 0.95, 1] });
+    const ctOpacity   = anim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0, 1], extrapolate: 'clamp' });
+    const ctY         = anim.interpolate({ inputRange: [0.4, 1], outputRange: [10, 0], extrapolate: 'clamp' });
 
     if (!visible) return null;
 
     return (
         <Modal transparent visible={visible} animationType="none" onRequestClose={onClose} statusBarTranslucent>
             <View style={fmStyles.overlay}>
-                <Animated.View style={[fmStyles.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
-                    <View style={[fmStyles.bar, { backgroundColor: cfg.bar }]} />
-                    <View style={[fmStyles.iconBubble, { backgroundColor: cfg.iconBg }]}>
-                        <MaterialCommunityIcons name={cfg.icon as any} size={44} color={cfg.iconColor} />
+                <Animated.View style={[fmStyles.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}>
+                    <View style={fmStyles.iconZone}>
+                        <Animated.View style={[fmStyles.iconBg, { backgroundColor: cfg.tint, transform: [{ scale: iconScale }] }]}>
+                            <MaterialCommunityIcons name={cfg.icon as any} size={36} color={cfg.bg} />
+                        </Animated.View>
                     </View>
-                    <Text style={fmStyles.title}>{title}</Text>
-                    <Text style={fmStyles.message}>{message}</Text>
-                    {!autoDismiss ? (
-                        <TouchableOpacity style={[fmStyles.btn, { backgroundColor: cfg.btnColor }]} onPress={onClose} activeOpacity={0.85}>
-                            <Text style={fmStyles.btnText}>Got it</Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={fmStyles.dismissRow}>
-                            <ActivityIndicator size="small" color={cfg.iconColor} />
-                            <Text style={[fmStyles.dismissText, { color: cfg.iconColor }]}>
-                                {type === 'success' ? 'Going back…' : 'Please wait…'}
-                            </Text>
+                    <Animated.View style={[fmStyles.textZone, { opacity: ctOpacity, transform: [{ translateY: ctY }] }]}>
+                        <Text style={fmStyles.fmTitle}>{title}</Text>
+                        <Text style={fmStyles.fmMessage}>{message}</Text>
+                    </Animated.View>
+                    <View style={fmStyles.sep} />
+                    {autoDismiss && type === 'success' ? (
+                        <View style={fmStyles.btn}>
+                            <ActivityIndicator size="small" color={cfg.bg} />
+                            <Text style={[fmStyles.btnText, { color: cfg.bg, marginLeft: 8 }]}>Going back…</Text>
                         </View>
-                    )}
+                    ) : !autoDismiss ? (
+                        <TouchableOpacity style={fmStyles.btn} onPress={onClose} activeOpacity={0.75}>
+                            <Text style={[fmStyles.btnText, { color: cfg.bg }]}>{cfg.btn}</Text>
+                        </TouchableOpacity>
+                    ) : null}
                 </Animated.View>
             </View>
         </Modal>
@@ -123,16 +131,16 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({
 };
 
 const fmStyles = StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(10, 18, 36, 0.65)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-    card: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 28, alignItems: 'center', paddingBottom: 28, paddingHorizontal: 24, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 20 },
-    bar: { width: '100%', height: 5, marginBottom: 28 },
-    iconBubble: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center', marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-    title: { fontSize: 21, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 10, letterSpacing: 0.2 },
-    message: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22, marginBottom: 26 },
-    btn: { width: '100%', paddingVertical: 15, borderRadius: 16, alignItems: 'center' },
-    btnText: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-    dismissRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-    dismissText: { fontSize: 14, fontWeight: '600' },
+    overlay:  { flex: 1, backgroundColor: 'rgba(10,18,36,0.65)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+    card:     { width: '100%', backgroundColor: '#FFF', borderRadius: 24, alignItems: 'center', overflow: 'hidden', elevation: 18, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } },
+    iconZone: { paddingTop: 32, paddingBottom: 16, alignItems: 'center' },
+    iconBg:   { width: 74, height: 74, borderRadius: 37, alignItems: 'center', justifyContent: 'center' },
+    textZone: { alignItems: 'center', paddingHorizontal: 24, paddingBottom: 20 },
+    fmTitle:   { fontSize: 18, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 6 },
+    fmMessage: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20 },
+    sep:      { width: '100%', height: 1, backgroundColor: '#F1F5F9' },
+    btn:      { width: '100%', paddingVertical: 17, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', backgroundColor: '#FFF' },
+    btnText:  { fontSize: 15, fontWeight: '700' },
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -285,8 +293,6 @@ const DeleteConfirmModal = ({
     </Modal>
 );
 
-// ─── Payment Modal ────────────────────────────────────────────────────
-// ─── Payment Modal (CENTERED STANDARD MODAL) ─────────────────────────
 // ─── Payment Modal (FINAL – CENTERED + ZOOM EFFECT) ───────────────────
 const PaymentModal = ({
     visible, onClose, onSave, initialData,
@@ -561,13 +567,14 @@ const pmStyles = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────
 interface Props {
     navigation: any;
-    route: { params?: { project?: any; onSuccess?: () => void } };
+    route: { params?: { project?: any; lead?: any; onSuccess?: () => void } };
 }
 
 export default function AddEditProjectScreen({ navigation, route }: Props) {
     const { apiRequest } = useAuthApi();
     const insets = useSafeAreaInsets();
     const existingProject = route?.params?.project;
+    const leadData = route?.params?.lead;   // 🔥 lead data for pre‑fill
     const isEdit = !!existingProject;
     const projectId = existingProject?.id;
 
@@ -580,6 +587,7 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
     const [address, setAddress] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [paymentType, setPaymentType] = useState<'cash' | 'loan'>('cash');
+    const [projectCategory, setProjectCategory] = useState<'RES' | 'COM'>('RES');   // ← NEW state
     const [remarks, setRemarks] = useState('');
     const [payments, setPayments] = useState<any[]>([]);
 
@@ -609,6 +617,15 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
         autoDismiss: false,
     });
 
+    // ─── Pre‑fill from lead when creating a new project ──────────────
+    useEffect(() => {
+        if (!isEdit && leadData) {
+            setCustomerName(leadData.customer_name || '');
+            setMobile(leadData.mobile || '');
+            setAddress(leadData.place || leadData.address || '');
+        }
+    }, [leadData, isEdit]);
+
     // ─── Fetch full project details when editing ────────────────────────
     useEffect(() => {
         if (isEdit && projectId) {
@@ -622,10 +639,10 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
                         setAddress(data.address || '');
                         setTotalAmount(data.total_amount ? String(data.total_amount) : '');
                         setPaymentType(data.payment_type || 'cash');
+                        setProjectCategory(data.category || 'RES');   // ← NEW
                         setRemarks(data.remarks || '');
 
                         // Existing images — store id + absolute URL for display only
-                        // These are NOT re-uploaded; only their IDs are sent if removed
                         setExistingImages(
                             (data.images || []).map((img: any) => ({
                                 id: img.id,
@@ -668,8 +685,6 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
         return () => navigation.setOptions({ gestureEnabled: true });
     }, [navigation]);
 
-    // ─── Image picker ──────────────────────────────────────────────────
-    // ─── Image picker ──────────────────────────────────────────────────
     // ─── Image picker ──────────────────────────────────────────────────
     const pickImages = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -776,6 +791,7 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
             formData.append('address', address.trim());
             formData.append('total_amount', totalAmount);
             formData.append('payment_type', paymentType);
+            formData.append('category', projectCategory);               // ← NEW
             formData.append('remarks', remarks.trim());
 
             // Only upload newly-picked local images (not existing server images)
@@ -794,6 +810,11 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
 
             // Send payments as a JSON string
             formData.append('payments', JSON.stringify(payments));
+
+            // 🔥 Send the lead ID so the backend can mark it as converted
+            if (leadData?.id) {
+                formData.append('lead_id', String(leadData.id));
+            }
 
             const url = isEdit
                 ? `${API_BASE_URL}/project/api/projects/${projectId}/`
@@ -843,11 +864,9 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
     };
 
     const closeFeedback = () => {
+        const wasSuccess = feedbackModal.type === 'success';
         setFeedbackModal(prev => ({ ...prev, visible: false }));
-        if (feedbackModal.type === 'success' && feedbackModal.autoDismiss) {
-            route?.params?.onSuccess?.();
-            navigation.goBack();
-        }
+        if (wasSuccess) navigation.goBack();
     };
 
     const avatarLetter = isEdit ? (customerName?.[0] || 'P').toUpperCase() : 'P';
@@ -855,283 +874,311 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
     // Show a loading indicator while fetching edit data
     if (loadingProject && isEdit) {
         return (
-            <SafeAreaView style={styles.root} edges={['top']}>
-                <View style={styles.centerLoader}>
-                    <ActivityIndicator size="large" color={THEME.primary} />
-                    <Text style={styles.loaderText}>Loading project…</Text>
-                </View>
-            </SafeAreaView>
+            <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+                <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
+                <SafeAreaView style={styles.root} edges={['top']}>
+                    <View style={{ flex: 1, backgroundColor: THEME.bg, justifyContent: 'center', alignItems: 'center', gap: 12 }}>
+                        <ActivityIndicator size="large" color={THEME.primary} />
+                        <Text style={styles.loaderText}>Loading project…</Text>
+                    </View>
+                </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
-            <FeedbackModal
-                visible={feedbackModal.visible}
-                type={feedbackModal.type}
-                title={feedbackModal.title}
-                message={feedbackModal.message}
-                autoDismiss={feedbackModal.autoDismiss}
-                onClose={closeFeedback}
-            />
+        <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+            <StatusBar barStyle="light-content" backgroundColor={THEME.primary} />
 
-            <PaymentModal
-                visible={paymentModalVisible}
-                onClose={() => { setPaymentModalVisible(false); setEditingPaymentIndex(null); }}
-                onSave={handleSavePayment}
-                initialData={editingPaymentIndex !== null ? payments[editingPaymentIndex] : undefined}
-            />
+            <GestureHandlerRootView style={{ flex: 1 }}>
+                <FeedbackModal
+                    visible={feedbackModal.visible}
+                    type={feedbackModal.type}
+                    title={feedbackModal.title}
+                    message={feedbackModal.message}
+                    autoDismiss={feedbackModal.autoDismiss}
+                    onClose={closeFeedback}
+                />
 
-            <DeleteConfirmModal
-                visible={deleteTargetIndex !== null}
-                itemName={deleteTargetIndex !== null ? `Payment #${deleteTargetIndex + 1}` : ''}
-                onCancel={() => setDeleteTargetIndex(null)}
-                onConfirm={handleDeletePayment}
-                loading={deleteLoading}
-            />
+                <PaymentModal
+                    visible={paymentModalVisible}
+                    onClose={() => { setPaymentModalVisible(false); setEditingPaymentIndex(null); }}
+                    onSave={handleSavePayment}
+                    initialData={editingPaymentIndex !== null ? payments[editingPaymentIndex] : undefined}
+                />
 
-            <SafeAreaView style={styles.root} edges={['top']}>
-                {/* Top Bar */}
-                <View style={styles.topBar}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                        <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
-                    </TouchableOpacity>
-                    <View style={styles.topBarCenter}>
-                        <View style={styles.topAvatar}>
-                            <Text style={styles.topAvatarText}>{avatarLetter}</Text>
+                <DeleteConfirmModal
+                    visible={deleteTargetIndex !== null}
+                    itemName={deleteTargetIndex !== null ? `Payment #${deleteTargetIndex + 1}` : ''}
+                    onCancel={() => setDeleteTargetIndex(null)}
+                    onConfirm={handleDeletePayment}
+                    loading={deleteLoading}
+                />
+
+                <SafeAreaView style={styles.root} edges={['top']}>
+                    {/* Top Bar */}
+                    <View style={styles.topBar}>
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                            <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
+                        </TouchableOpacity>
+                        <View style={styles.topBarCenter}>
+                            <View style={styles.topAvatar}>
+                                <Text style={styles.topAvatarText}>{avatarLetter}</Text>
+                            </View>
+                            <Text style={styles.topTitle}>{isEdit ? 'Edit Project' : 'New Project'}</Text>
+                            <Text style={styles.topSub}>
+                                {isEdit ? `Editing: ${existingProject?.customer_name || ''}` : 'Fill in the details below'}
+                            </Text>
                         </View>
-                        <Text style={styles.topTitle}>{isEdit ? 'Edit Project' : 'New Project'}</Text>
-                        <Text style={styles.topSub}>
-                            {isEdit ? `Editing: ${existingProject?.customer_name || ''}` : 'Fill in the details below'}
-                        </Text>
+                        <View style={{ width: 34 }} />
                     </View>
-                    <View style={{ width: 34 }} />
-                </View>
 
-                <KeyboardAvoidingView style={styles.keyboardWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                    <NativeViewGestureHandler disallowInterruption={true}>
-                        <ScrollView
-                            ref={scrollRef}
-                            style={styles.scroll}
-                            contentContainerStyle={[styles.scrollContent, { paddingBottom: 80 + insets.bottom }]}
-                            keyboardShouldPersistTaps="handled"
-                            keyboardDismissMode="none"
-                            showsVerticalScrollIndicator={false}
-                        >
-                            <Animated.View style={{ opacity: fadeAnim }}>
+                    <KeyboardAvoidingView style={[styles.keyboardWrap, { backgroundColor: THEME.bg, marginTop: -24 ,paddingTop: 29}]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
-                                {/* ── Basic Information ── */}
-                                <View style={styles.card}>
-                                    <SectionHeader icon="account-outline" label="Basic Information" />
-                                    <FieldWrap label="Customer Name" required error={errors.customerName}>
-                                        <StyledInput
-                                            value={customerName}
-                                            onChangeText={(v: string) => {
-                                                setCustomerName(v);
-                                                if (errors.customerName) setErrors(e => ({ ...e, customerName: '' }));
-                                            }}
-                                            placeholder="e.g. Vishnu K"
-                                            error={errors.customerName}
-                                        />
-                                    </FieldWrap>
-                                    <FieldWrap label="Mobile Number" required error={errors.mobile}>
-                                        <StyledInput
-                                            value={mobile}
-                                            onChangeText={(v: string) => {
-                                                setMobile(v);
-                                                if (errors.mobile) setErrors(e => ({ ...e, mobile: '' }));
-                                            }}
-                                            placeholder="+91 98765 43210"
-                                            keyboardType="phone-pad"
-                                            error={errors.mobile}
-                                        />
-                                    </FieldWrap>
-                                    <FieldWrap label="Address" required error={errors.address}>
-                                        <StyledInput
-                                            value={address}
-                                            onChangeText={(v: string) => {
-                                                setAddress(v);
-                                                if (errors.address) setErrors(e => ({ ...e, address: '' }));
-                                            }}
-                                            placeholder="Street, City, State, ZIP"
-                                            multiline
-                                            numberOfLines={2}
-                                            error={errors.address}
-                                        />
-                                    </FieldWrap>
-                                </View>
-
-                                {/* ── Financial Details ── */}
-                                <View style={styles.card}>
-                                    <SectionHeader icon="currency-inr" label="Financial Details" />
-                                    <FieldWrap label="Total Amount (₹)" required error={errors.totalAmount}>
-                                        <StyledInput
-                                            value={totalAmount}
-                                            onChangeText={(v: string) => {
-                                                setTotalAmount(v);
-                                                if (errors.totalAmount) setErrors(e => ({ ...e, totalAmount: '' }));
-                                            }}
-                                            placeholder="0.00"
-                                            keyboardType="decimal-pad"
-                                            error={errors.totalAmount}
-                                        />
-                                    </FieldWrap>
-                                    <FieldWrap label="Payment Type">
-                                        <View style={styles.paymentTypeRow}>
-                                            <TouchableOpacity
-                                                style={[styles.paymentTypeBtn, paymentType === 'cash' && styles.paymentTypeBtnActive]}
-                                                onPress={() => setPaymentType('cash')}
-                                            >
-                                                <MaterialCommunityIcons name="cash" size={16} color={paymentType === 'cash' ? THEME.primary : THEME.muted} />
-                                                <Text style={[styles.paymentTypeText, paymentType === 'cash' && styles.paymentTypeTextActive]}>Cash</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[styles.paymentTypeBtn, paymentType === 'loan' && styles.paymentTypeBtnActive]}
-                                                onPress={() => setPaymentType('loan')}
-                                            >
-                                                <MaterialCommunityIcons name="bank-outline" size={16} color={paymentType === 'loan' ? THEME.primary : THEME.muted} />
-                                                <Text style={[styles.paymentTypeText, paymentType === 'loan' && styles.paymentTypeTextActive]}>Loan</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </FieldWrap>
-                                    <FieldWrap label="Remarks">
-                                        <StyledInput
-                                            value={remarks}
-                                            onChangeText={(v: string) => setRemarks(v)}
-                                            placeholder="Optional notes about this project"
-                                            multiline
-                                            numberOfLines={3}
-                                        />
-                                    </FieldWrap>
-                                </View>
-
-                                {/* ── Photos / Attachments ── */}
-                                {/* ── Photos / Attachments ── */}
-                                <View style={styles.card}>
-                                   <SectionHeader
-    icon="image-outline"
-    label="Photos / Attachments"
-    onActionPress={pickImages}
-    actionLabel="Add"
-    actionIcon="image-plus"
-/>
-
-                                    {(existingImages.length > 0 || newImages.length > 0) && (
-                                        <View style={styles.imageThumbs}>
-                                            {existingImages.map(img => (
-                                                <View key={`existing-${img.id}`} style={styles.thumb}>
-                                                    <Image
-                                                        source={{ uri: img.uri }}
-                                                        style={StyleSheet.absoluteFill}
-                                                        resizeMode="cover"
-                                                    />
-                                                    <View style={styles.thumbBadge}>
-                                                        <MaterialCommunityIcons name="cloud-check" size={10} color="#FFF" />
-                                                    </View>
-                                                    <TouchableOpacity style={styles.removeThumb} onPress={() => removeExistingImage(img.id)}>
-                                                        <MaterialCommunityIcons name="close" size={14} color="#FFF" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ))}
-                                            {newImages.map((img, idx) => (
-                                                <View key={`new-${idx}`} style={styles.thumb}>
-                                                    <Image
-                                                        source={{ uri: img.uri }}
-                                                        style={StyleSheet.absoluteFill}
-                                                        resizeMode="cover"
-                                                    />
-                                                    <View style={[styles.thumbBadge, { backgroundColor: THEME.warning }]}>
-                                                        <MaterialCommunityIcons name="upload" size={10} color="#FFF" />
-                                                    </View>
-                                                    <TouchableOpacity style={styles.removeThumb} onPress={() => removeNewImage(idx)}>
-                                                        <MaterialCommunityIcons name="close" size={14} color="#FFF" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    )}
-
-                                    {(existingImages.length > 0 || newImages.length > 0) && (
-                                        <View style={styles.imageLegend}>
-                                            <View style={styles.imageLegendItem}>
-                                                <MaterialCommunityIcons name="cloud-check" size={12} color={THEME.success} />
-                                                <Text style={styles.imageLegendText}>Saved</Text>
-                                            </View>
-                                            <View style={styles.imageLegendItem}>
-                                                <MaterialCommunityIcons name="upload" size={12} color={THEME.warning} />
-                                                <Text style={styles.imageLegendText}>Pending upload</Text>
-                                            </View>
-                                        </View>
-                                    )}
-                                </View>
-
-                                {/* ── Payment Terms ── */}
-                                <View style={styles.card}>
-                                    <SectionHeader
-    icon="credit-card-outline"
-    label="Payment Terms"
-    onActionPress={openAddPayment}
-    actionLabel="Add"
-    actionIcon="plus-circle-outline"
-/>
-                                    {payments.length > 0 ? (
-                                        payments.map((item: any, idx: number) => (
-                                            <PaymentItem
-                                                key={idx}
-                                                index={idx}
-                                                item={item}
-                                                onEdit={openEditPayment}
-                                                onDelete={confirmDeletePayment}
-                                            />
-                                        ))
-                                    ) : (
-                                        <Text style={styles.emptyPayments}>No payments added yet</Text>
-                                    )}
-                                    
-                                </View>
-
-                            </Animated.View>
-                        </ScrollView>
-                    </NativeViewGestureHandler>
-
-                    {/* Fixed Footer */}
-                    <View style={[styles.fixedFooter, { paddingBottom: insets.bottom }]}>
-                        <View style={styles.submitRow}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-                                <Text style={styles.cancelText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
-                                onPress={handleSave}
-                                disabled={saving}
+                        <NativeViewGestureHandler disallowInterruption={true}>
+                            <ScrollView
+                                ref={scrollRef}
+                                style={styles.scroll}
+                                contentContainerStyle={styles.scrollContent}
+                                keyboardShouldPersistTaps="handled"
+                                keyboardDismissMode="none"
+                                showsVerticalScrollIndicator={false}
                             >
-                                {saving ? (
-                                    <ActivityIndicator color="#FFF" size="small" />
-                                ) : (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <MaterialCommunityIcons
-                                            name={isEdit ? 'content-save-outline' : 'account-plus-outline'}
-                                            size={16}
-                                            color="#FFF"
-                                        />
-                                        <Text style={styles.submitText}>{isEdit ? 'Save Changes' : 'Create Project'}</Text>
+                                <Animated.View style={{ opacity: fadeAnim }}>
+
+                                    {/* ── Basic Information ── */}
+                                    <View style={styles.card}>
+                                        <SectionHeader icon="account-outline" label="Basic Information" />
+                                        <FieldWrap label="Customer Name" required error={errors.customerName}>
+                                            <StyledInput
+                                                value={customerName}
+                                                onChangeText={(v: string) => {
+                                                    setCustomerName(v);
+                                                    if (errors.customerName) setErrors(e => ({ ...e, customerName: '' }));
+                                                }}
+                                                placeholder="e.g. Vishnu K"
+                                                error={errors.customerName}
+                                            />
+                                        </FieldWrap>
+                                        <FieldWrap label="Mobile Number" required error={errors.mobile}>
+                                            <StyledInput
+                                                value={mobile}
+                                                onChangeText={(v: string) => {
+                                                    setMobile(v);
+                                                    if (errors.mobile) setErrors(e => ({ ...e, mobile: '' }));
+                                                }}
+                                                placeholder="+91 98765 43210"
+                                                keyboardType="phone-pad"
+                                                error={errors.mobile}
+                                            />
+                                        </FieldWrap>
+                                        <FieldWrap label="Address" required error={errors.address}>
+                                            <StyledInput
+                                                value={address}
+                                                onChangeText={(v: string) => {
+                                                    setAddress(v);
+                                                    if (errors.address) setErrors(e => ({ ...e, address: '' }));
+                                                }}
+                                                placeholder="Street, City, State, ZIP"
+                                                multiline
+                                                numberOfLines={2}
+                                                error={errors.address}
+                                            />
+                                        </FieldWrap>
                                     </View>
-                                )}
-                            </TouchableOpacity>
+
+                                    {/* ── Financial Details ── */}
+                                    <View style={styles.card}>
+                                        <SectionHeader icon="currency-inr" label="Financial Details" />
+                                        <FieldWrap label="Total Amount (₹)" required error={errors.totalAmount}>
+                                            <StyledInput
+                                                value={totalAmount}
+                                                onChangeText={(v: string) => {
+                                                    setTotalAmount(v);
+                                                    if (errors.totalAmount) setErrors(e => ({ ...e, totalAmount: '' }));
+                                                }}
+                                                placeholder="0.00"
+                                                keyboardType="decimal-pad"
+                                                error={errors.totalAmount}
+                                            />
+                                        </FieldWrap>
+                                        <FieldWrap label="Payment Type">
+                                            <View style={styles.paymentTypeRow}>
+                                                <TouchableOpacity
+                                                    style={[styles.paymentTypeBtn, paymentType === 'cash' && styles.paymentTypeBtnActive]}
+                                                    onPress={() => setPaymentType('cash')}
+                                                >
+                                                    <MaterialCommunityIcons name="cash" size={16} color={paymentType === 'cash' ? THEME.primary : THEME.muted} />
+                                                    <Text style={[styles.paymentTypeText, paymentType === 'cash' && styles.paymentTypeTextActive]}>Cash</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={[styles.paymentTypeBtn, paymentType === 'loan' && styles.paymentTypeBtnActive]}
+                                                    onPress={() => setPaymentType('loan')}
+                                                >
+                                                    <MaterialCommunityIcons name="bank-outline" size={16} color={paymentType === 'loan' ? THEME.primary : THEME.muted} />
+                                                    <Text style={[styles.paymentTypeText, paymentType === 'loan' && styles.paymentTypeTextActive]}>Loan</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </FieldWrap>
+
+                                        {/* ── NEW: Project Category ── */}
+                                        <FieldWrap label="Project Category">
+                                            <View style={styles.paymentTypeRow}>
+                                                <TouchableOpacity
+                                                    style={[styles.paymentTypeBtn, projectCategory === 'RES' && styles.paymentTypeBtnActive]}
+                                                    onPress={() => setProjectCategory('RES')}
+                                                >
+                                                    <MaterialCommunityIcons name="home-outline" size={16} color={projectCategory === 'RES' ? THEME.primary : THEME.muted} />
+                                                    <Text style={[styles.paymentTypeText, projectCategory === 'RES' && styles.paymentTypeTextActive]}>Residential</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={[styles.paymentTypeBtn, projectCategory === 'COM' && styles.paymentTypeBtnActive]}
+                                                    onPress={() => setProjectCategory('COM')}
+                                                >
+                                                    <MaterialCommunityIcons name="office-building-outline" size={16} color={projectCategory === 'COM' ? THEME.primary : THEME.muted} />
+                                                    <Text style={[styles.paymentTypeText, projectCategory === 'COM' && styles.paymentTypeTextActive]}>Commercial</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </FieldWrap>
+
+                                        <FieldWrap label="Remarks">
+                                            <StyledInput
+                                                value={remarks}
+                                                onChangeText={(v: string) => setRemarks(v)}
+                                                placeholder="Optional notes about this project"
+                                                multiline
+                                                numberOfLines={3}
+                                            />
+                                        </FieldWrap>
+                                    </View>
+
+                                    {/* ── Photos / Attachments ── */}
+                                    <View style={styles.card}>
+                                        <SectionHeader
+                                            icon="image-outline"
+                                            label="Photos / Attachments"
+                                            onActionPress={pickImages}
+                                            actionLabel="Add"
+                                            actionIcon="image-plus"
+                                        />
+
+                                        {(existingImages.length > 0 || newImages.length > 0) && (
+                                            <View style={styles.imageThumbs}>
+                                                {existingImages.map(img => (
+                                                    <View key={`existing-${img.id}`} style={styles.thumb}>
+                                                        <Image
+                                                            source={{ uri: img.uri }}
+                                                            style={StyleSheet.absoluteFill}
+                                                            resizeMode="cover"
+                                                        />
+                                                        <View style={styles.thumbBadge}>
+                                                            <MaterialCommunityIcons name="cloud-check" size={10} color="#FFF" />
+                                                        </View>
+                                                        <TouchableOpacity style={styles.removeThumb} onPress={() => removeExistingImage(img.id)}>
+                                                            <MaterialCommunityIcons name="close" size={14} color="#FFF" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))}
+                                                {newImages.map((img, idx) => (
+                                                    <View key={`new-${idx}`} style={styles.thumb}>
+                                                        <Image
+                                                            source={{ uri: img.uri }}
+                                                            style={StyleSheet.absoluteFill}
+                                                            resizeMode="cover"
+                                                        />
+                                                        <View style={[styles.thumbBadge, { backgroundColor: THEME.warning }]}>
+                                                            <MaterialCommunityIcons name="upload" size={10} color="#FFF" />
+                                                        </View>
+                                                        <TouchableOpacity style={styles.removeThumb} onPress={() => removeNewImage(idx)}>
+                                                            <MaterialCommunityIcons name="close" size={14} color="#FFF" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        {(existingImages.length > 0 || newImages.length > 0) && (
+                                            <View style={styles.imageLegend}>
+                                                <View style={styles.imageLegendItem}>
+                                                    <MaterialCommunityIcons name="cloud-check" size={12} color={THEME.success} />
+                                                    <Text style={styles.imageLegendText}>Saved</Text>
+                                                </View>
+                                                <View style={styles.imageLegendItem}>
+                                                    <MaterialCommunityIcons name="upload" size={12} color={THEME.warning} />
+                                                    <Text style={styles.imageLegendText}>Pending upload</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    {/* ── Payment Terms ── */}
+                                   <View style={[styles.card, { marginBottom: 0 }]}>
+
+                                        <SectionHeader
+                                            icon="credit-card-outline"
+                                            label="Payment Terms"
+                                            onActionPress={openAddPayment}
+                                            actionLabel="Add"
+                                            actionIcon="plus-circle-outline"
+                                        />
+                                        {payments.length > 0 ? (
+                                            payments.map((item: any, idx: number) => (
+                                                <PaymentItem
+                                                    key={idx}
+                                                    index={idx}
+                                                    item={item}
+                                                    onEdit={openEditPayment}
+                                                    onDelete={confirmDeletePayment}
+                                                />
+                                            ))
+                                        ) : (
+                                            <Text style={styles.emptyPayments}>No payments added yet</Text>
+                                        )}
+                                    </View>
+
+                                </Animated.View>
+                            </ScrollView>
+                        </NativeViewGestureHandler>
+
+                        {/* Fixed Footer */}
+                        <View style={[styles.fixedFooter, { paddingBottom: insets.bottom }]}>
+                            <View style={styles.submitRow}>
+                                <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
+                                    <Text style={styles.cancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
+                                    onPress={handleSave}
+                                    disabled={saving}
+                                >
+                                    {saving ? (
+                                        <ActivityIndicator color="#FFF" size="small" />
+                                    ) : (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <MaterialCommunityIcons
+                                                name={isEdit ? 'content-save-outline' : 'account-plus-outline'}
+                                                size={16}
+                                                color="#FFF"
+                                            />
+                                            <Text style={styles.submitText}>{isEdit ? 'Save Changes' : 'Create Project'}</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
-                </KeyboardAvoidingView>
-            </SafeAreaView>
-        </GestureHandlerRootView>
+                    </KeyboardAvoidingView>
+                </SafeAreaView>
+            </GestureHandlerRootView>
+        </View>
     );
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: THEME.bg },
+    root: { flex: 1, backgroundColor: 'transparent' },
     centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
     loaderText: { fontSize: 14, color: THEME.muted, marginTop: 12 },
-    topBar: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+    topBar: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, zIndex: 1, elevation: 4, shadowColor: THEME.primary, shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
     backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
     topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
     topAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6 },
@@ -1140,7 +1187,7 @@ const styles = StyleSheet.create({
     topSub: { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
     keyboardWrap: { flex: 1 },
     scroll: { flex: 1 },
-    scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+    scrollContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 30 ,marginTop:10},
     card: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: THEME.border, padding: 14, marginBottom: 14, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 10 },
     sectionLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1201,25 +1248,7 @@ const styles = StyleSheet.create({
     submitBtn: { flex: 2.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: THEME.primary, elevation: 3, shadowColor: THEME.primary, shadowOpacity: 0.3, shadowRadius: 8 },
     submitBtnDisabled: { opacity: 0.65 },
     submitText: { fontSize: 14, fontWeight: '800', color: '#FFF' },
-    sectionRight: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-},
-sectionAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: THEME.primaryLight,
-},
-sectionAddText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.primary,
-    marginRight: 4,
-},
+    sectionRight: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    sectionAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, height: 28, borderRadius: 8, backgroundColor: THEME.primaryLight },
+    sectionAddText: { fontSize: 12, fontWeight: '700', color: THEME.primary, marginRight: 4 },
 });

@@ -25,7 +25,7 @@ import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
-import { userCache } from '../hooks/userCache';
+import { AccountMenu } from '../components/AccountMenu';
 
 const { height } = Dimensions.get('window');
 
@@ -649,12 +649,6 @@ export default function LeadsScreen({ navigation, route }: any) {
   const [notifCount, setNotifCount] = useState(() => getBadgeCount());
   useEffect(() => subscribeBadge(setNotifCount), []);
 
-  const cachedUser = userCache.current;
-  const avatarName = cachedUser?.first_name
-    ? `${cachedUser.first_name} ${cachedUser.last_name ?? ''}`.trim()
-    : (cachedUser?.username ?? 'U');
-  const avatarInitials = avatarName.split(' ').filter(Boolean).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
-
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -698,10 +692,10 @@ export default function LeadsScreen({ navigation, route }: any) {
       setLoadingStatusOptions(true);
 
       try {
-        const qRes = await apiRequest(`${API_BASE_URL}/lead/quality/manage/`);
+        const qRes = await apiRequest(`${API_BASE_URL}/lead/api/config/qualities/`);
         if (qRes.ok) {
           const qData = await qRes.json();
-          setQualityOptions(qData.data || []);
+          setQualityOptions(qData.items || []);
         }
       } catch (err) {
         console.warn('Quality options fetch failed');
@@ -994,12 +988,7 @@ export default function LeadsScreen({ navigation, route }: any) {
                     </View>
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => navigation.navigate('Profile', { user: cachedUser })}
-                >
-                  <Text style={styles.avatarInitial}>{avatarInitials}</Text>
-                </TouchableOpacity>
+                <AccountMenu navigation={navigation} />
               </View>
             </View>
             <View style={styles.searchBar}>
@@ -1233,7 +1222,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3, borderWidth: 1.5, borderColor: THEME.primary,
   },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
-  avatarInitial: { color: '#FFF', fontSize: 13, fontWeight: '800' },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FFF', borderRadius: 10,

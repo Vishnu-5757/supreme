@@ -64,6 +64,7 @@ export const clearAuthTokens = () => {
 };
 
 export const getAccessToken = () => globalAccessToken;
+export const getRefreshToken = () => globalRefreshToken;
 
 // Replace the existing setSessionExpiredCallback with this:
 export const setSessionExpiredCallback = (callback: (() => void) | null) => {

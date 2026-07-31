@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, View, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface SkeletonProps {
   width?: number | `${number}%` | 'auto';
@@ -87,6 +88,42 @@ export function SkeletonStatCard({ style }: { style?: any }) {
   );
 }
 
+// ── Full-screen premium skeleton (shown while a guarded tab loads) ──────────
+// Mirrors the maroon header + rounded white body chrome shared by
+// Service / Projects / Leads / Users so the transition feels seamless
+// instead of a jarring spinner-on-blank-screen flash.
+export function AppScreenSkeleton({ title = 'Loading' }: { title?: string }) {
+  return (
+    <View style={sk.screen}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#8E1C1C' }}>
+        <View style={sk.header}>
+          <View style={sk.headerTopRow}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Skeleton width={Math.min(140, title.length * 13 + 40)} height={20} radius={6} style={sk.onDark} />
+              <Skeleton width={70} height={11} radius={6} style={[sk.onDark, { marginTop: 6, opacity: 0.7 }]} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Skeleton width={34} height={34} radius={17} style={sk.onDark} />
+              <Skeleton width={34} height={34} radius={17} style={sk.onDark} />
+            </View>
+          </View>
+          <Skeleton width="100%" height={38} radius={10} style={[sk.onDark, { marginTop: 14, opacity: 0.9 }]} />
+        </View>
+      </SafeAreaView>
+
+      <View style={sk.body}>
+        <View style={sk.bodyHeadRow}>
+          <Skeleton width={90} height={22} radius={11} />
+          <Skeleton width={60} height={22} radius={11} />
+        </View>
+        {[0, 1, 2, 3, 4].map(i => (
+          <SkeletonRow key={i} style={{ marginBottom: 12 }} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const sk = StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -111,4 +148,15 @@ const sk = StyleSheet.create({
     backgroundColor: '#FFF', borderRadius: 16,
     padding: 18, alignItems: 'flex-start',
   },
+
+  screen: { flex: 1, backgroundColor: '#8E1C1C' },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 26 },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  onDark: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  body: {
+    flex: 1, backgroundColor: '#F5F6F8',
+    marginTop: -16, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    overflow: 'hidden', padding: 16,
+  },
+  bodyHeadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
 });

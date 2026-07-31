@@ -1,6 +1,6 @@
 // App.tsx – Dashboard header always visible, other tabs guarded
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Easing, Modal, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Easing, Modal, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import {
   NavigationContainer,
   createNavigationContainerRef,
@@ -42,6 +42,7 @@ import ProfileScreen         from './screens/ProfileScreen';
 import EditProfileScreen     from './screens/EditProfileScreen';
 import ChangePasswordScreen  from './screens/ChangePasswordScreen';
 import SplashScreenView      from './components/SplashScreenView';
+import { AppScreenSkeleton } from './components/Skeleton';
 
 // ── Navigation ref (used by notification deep-links outside React tree) ──
 export const navigationRef = createNavigationContainerRef();
@@ -95,12 +96,8 @@ function premiumSlide({ current, next, layouts }: any) {
   };
 }
 
-function LoadingScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5F6F8' }}>
-      <ActivityIndicator size="large" color="#8E1C1C" />
-    </View>
-  );
+function LoadingScreen({ title }: { title?: string }) {
+  return <AppScreenSkeleton title={title} />;
 }
 
 function SplashScreen() {
@@ -113,28 +110,28 @@ function SplashScreen() {
 // ── Guarded screens for all tabs EXCEPT Dashboard ──
 function GuardedService(props: any) {
   const { canAccess, loading } = usePermissionContext();
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen title="Service" />;
   if (!canAccess('service')) return <NoAccessScreen moduleName="Service" />;
   return <ServiceScreen {...props} />;
 }
 
 function GuardedProjects(props: any) {
   const { canAccess, loading } = usePermissionContext();
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen title="Projects" />;
   if (!canAccess('project')) return <NoAccessScreen moduleName="Projects" />;
   return <ProjectsScreen {...props} />;
 }
 
 function GuardedLeads(props: any) {
   const { canAccess, loading } = usePermissionContext();
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen title="Leads" />;
   if (!canAccess('lead')) return <NoAccessScreen moduleName="Leads" />;
   return <LeadsScreen {...props} />;
 }
 
 function GuardedUsers(props: any) {
   const { canAccess, loading } = usePermissionContext();
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen title="Users" />;
   if (!canAccess('users')) return <NoAccessScreen moduleName="Users" />;
   return <UsersScreen {...props} />;
 }

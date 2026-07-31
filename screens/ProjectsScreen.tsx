@@ -23,9 +23,9 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
-import { userCache } from '../hooks/userCache';
 import { usePermissionContext } from '../hooks/PermissionContext';
 import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
+import { AccountMenu } from '../components/AccountMenu';
 
 const { height } = Dimensions.get('window');
 
@@ -258,7 +258,7 @@ const pdcStyles = StyleSheet.create({
 });
 
 // Detail Modal (simmilar to LeadDetailModal)
-const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCall, onTrack, canEdit, canDelete, canTrack }: any) => {
+const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCall, onTrack, onOpenLocation, canEdit, canDelete, canTrack }: any) => {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const backdropOp = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
@@ -401,6 +401,13 @@ const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCal
     </TouchableOpacity>
   )}
 
+  {!!project.location_link && (
+    <TouchableOpacity style={[styles.quickBtn, { backgroundColor: THEME.primaryLight }]} onPress={() => onOpenLocation?.(project.location_link)}>
+      <MaterialCommunityIcons name="map-marker" size={20} color={THEME.primary} />
+      <Text style={[styles.quickBtnText, { color: THEME.primary }]}>Location</Text>
+    </TouchableOpacity>
+  )}
+
   {canDelete && (
     <TouchableOpacity style={[styles.quickBtn, { backgroundColor: THEME.dangerLight }]} onPress={() => onDelete(project)}>
       <MaterialCommunityIcons name="trash-can-outline" size={20} color={THEME.danger} />
@@ -482,7 +489,7 @@ const DetailRow = ({ icon, label, value, color }: any) => {
 };
 
 // Project Card – status tag removed, footer shows only a right arrow
-const ProjectCard = React.memo(({ project, index, onPress }: any) => {
+const ProjectCard = React.memo(({ project, index, onPress, onOpenLocation }: any) => {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(6)).current;
 
@@ -562,7 +569,18 @@ const ProjectCard = React.memo(({ project, index, onPress }: any) => {
             <MaterialCommunityIcons name="clock-outline" size={12} color={THEME.mutedLight} />
             <Text style={styles.dateText}>{formatDate(project.created_at)}</Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={THEME.mutedLight} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {!!project.location_link && (
+              <TouchableOpacity
+                style={styles.locationPinBtn}
+                onPress={() => onOpenLocation?.(project.location_link)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="map-marker" size={16} color={THEME.primary} />
+              </TouchableOpacity>
+            )}
+            <MaterialCommunityIcons name="chevron-right" size={18} color={THEME.mutedLight} />
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -666,12 +684,6 @@ export default function ProjectsScreen({ navigation }: any) {
 
   const [notifCount, setNotifCount] = useState(() => getBadgeCount());
   useEffect(() => subscribeBadge(setNotifCount), []);
-
-  const cachedUser = userCache.current;
-  const avatarName = cachedUser?.first_name
-    ? `${cachedUser.first_name} ${cachedUser.last_name ?? ''}`.trim()
-    : (cachedUser?.username ?? 'U');
-  const avatarInitials = avatarName.split(' ').filter(Boolean).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -812,6 +824,15 @@ export default function ProjectsScreen({ navigation }: any) {
     }
   };
 
+  const handleOpenLocation = async (locationLink: string) => {
+    if (!locationLink) return;
+    try {
+      await Linking.openURL(locationLink);
+    } catch {
+      showToast('Unable to open location', 'error');
+    }
+  };
+
   const openDetail = (project: any) => {
     setSelectedProject(project);
     setShowDetailModal(true);
@@ -896,12 +917,7 @@ export default function ProjectsScreen({ navigation }: any) {
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => navigation.navigate('Profile', { user: cachedUser })}
-              >
-                <Text style={styles.avatarInitial}>{avatarInitials}</Text>
-              </TouchableOpacity>
+              <AccountMenu navigation={navigation} />
             </View>
           </View>
           <View style={styles.searchBar}>
@@ -950,7 +966,9 @@ export default function ProjectsScreen({ navigation }: any) {
         <FlatList
           data={projects}
           keyExtractor={item => item.id.toString()}
-          renderItem={({ item, index }) => <ProjectCard project={item} index={index} onPress={() => cardPress(item)} />}
+          renderItem={({ item, index }) => (
+            <ProjectCard project={item} index={index} onPress={() => cardPress(item)} onOpenLocation={handleOpenLocation} />
+          )}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.primary} colors={[THEME.primary]} />
@@ -1000,6 +1018,7 @@ export default function ProjectsScreen({ navigation }: any) {
   onDelete={handleDeleteProject}
   onCall={handleCall}
   onTrack={handleTrackProject}
+  onOpenLocation={handleOpenLocation}
   canEdit={canEdit}
   canDelete={canDelete}
   canTrack={canTrack}
@@ -1048,7 +1067,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3, borderWidth: 1.5, borderColor: THEME.primary,
   },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
-  avatarInitial: { color: '#FFF', fontSize: 13, fontWeight: '800' },
 
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -1117,6 +1135,11 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
   footerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
   dateText: { fontSize: 11, color: THEME.mutedLight, flexShrink: 1 },
+  locationPinBtn: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: THEME.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   // Detail Modal Styles
   fullModalRoot: { flex: 1, justifyContent: 'flex-end' },

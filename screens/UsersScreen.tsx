@@ -20,7 +20,7 @@ import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
-import { userCache } from '../hooks/userCache';
+import { AccountMenu } from '../components/AccountMenu';
 
 const { width } = Dimensions.get('window');
 
@@ -352,12 +352,6 @@ export default function UsersScreen({ navigation }: any) {
   const [notifCount, setNotifCount] = useState(() => getBadgeCount());
   useEffect(() => subscribeBadge(setNotifCount), []);
 
-  const cachedUser = userCache.current;
-  const avatarName = cachedUser?.first_name
-    ? `${cachedUser.first_name} ${cachedUser.last_name ?? ''}`.trim()
-    : (cachedUser?.username ?? 'U');
-  const avatarInitials = avatarName.split(' ').filter(Boolean).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
-
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -532,12 +526,7 @@ export default function UsersScreen({ navigation }: any) {
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => navigation.navigate('Profile', { user: cachedUser })}
-              >
-                <Text style={styles.avatarInitial}>{avatarInitials}</Text>
-              </TouchableOpacity>
+              <AccountMenu navigation={navigation} />
             </View>
           </View>
 
@@ -740,7 +729,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3, borderWidth: 1.5, borderColor: THEME.primary,
   },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
-  avatarInitial: { color: '#FFF', fontSize: 13, fontWeight: '800' },
 
   fab: {
     position: 'absolute',

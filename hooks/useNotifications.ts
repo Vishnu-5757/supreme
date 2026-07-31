@@ -52,6 +52,29 @@ async function postDeviceToken(fcmToken: string): Promise<void> {
   }
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// FCM's token registration call to Google Play Services intermittently throws
+// SERVICE_NOT_AVAILABLE right after login (Play Services still warming up,
+// brief connectivity blip, etc). It's transient — retry with backoff before
+// giving up instead of silently never registering the device.
+async function getDevicePushTokenWithRetry(maxAttempts = 3) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await Notifications.getDevicePushTokenAsync();
+    } catch (err: any) {
+      const isLastAttempt = attempt === maxAttempts;
+      console.warn(
+        `[Push] getDevicePushTokenAsync attempt ${attempt}/${maxAttempts} failed:`,
+        err?.message ?? err,
+      );
+      if (isLastAttempt) throw err;
+      await sleep(attempt * 2000); // 2s, 4s, ...
+    }
+  }
+  throw new Error('unreachable');
+}
+
 // Call this immediately after a successful login.
 export async function registerForPushNotificationsAsync(): Promise<void> {
   console.log('[Push] registerForPushNotificationsAsync() called');
@@ -80,7 +103,7 @@ export async function registerForPushNotificationsAsync(): Promise<void> {
     }
 
     console.log('[Push] Permission granted. Fetching FCM device token...');
-    const { data: fcmToken } = await Notifications.getDevicePushTokenAsync();
+    const { data: fcmToken } = await getDevicePushTokenWithRetry();
     console.log('[Push] FCM token obtained:', fcmToken ? fcmToken.slice(0, 20) + '...' : 'null/empty');
 
     await postDeviceToken(fcmToken);

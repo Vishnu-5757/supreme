@@ -10,15 +10,10 @@ import React, {
 } from 'react';
 
 import {
-  ActivityIndicator,
   Animated,
-  BackHandler,
   Dimensions,
   Easing,
   Modal,
-  PanResponder,
-  Platform,
-  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -28,10 +23,7 @@ import {
   View,
 } from 'react-native';
 
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -53,12 +45,12 @@ import {
   getBadgeCount,
   subscribeBadge,
 } from '../hooks/notifBadge';
+import { AccountMenu } from '../components/AccountMenu';
 
 const { width } = Dimensions.get('window');
 
 const CARD_GAP = 12;
 const CARD_WIDTH = Math.round(width * 0.34);
-const DRAWER_WIDTH = Math.min(330, width * 0.82);
 
 const THEME = {
   primary: '#8E1C1C',
@@ -328,121 +320,6 @@ function StatCard({
           {sub}
         </Text>
       </View>
-    </Animated.View>
-  );
-}
-
-function DrawerItem({
-  icon,
-  label,
-  onPress,
-  danger,
-  delay = 0,
-  loading = false,
-  locked = false,
-}: any) {
-  const itemAnim = useRef(
-    new Animated.Value(0),
-  ).current;
-
-  useEffect(() => {
-    Animated.timing(itemAnim, {
-      toValue: 1,
-      duration: 260,
-      delay,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [delay, itemAnim]);
-
-  const translateX = itemAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [14, 0],
-  });
-
-  const handlePress = locked
-    ? undefined
-    : onPress;
-
-  return (
-    <Animated.View
-      style={{
-        opacity: itemAnim,
-        transform: [{ translateX }],
-      }}
-    >
-      <Pressable
-        onPress={handlePress}
-        disabled={loading || locked}
-        style={({ pressed }) => [
-          styles.drawerItem,
-
-          danger &&
-            !locked &&
-            styles.drawerItemDanger,
-
-          (loading || locked) && {
-            opacity: 0.6,
-          },
-
-          pressed &&
-            !locked &&
-            !loading && {
-              opacity: 0.85,
-            },
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator
-            size="small"
-            color={THEME.danger}
-            style={{
-              width: 28,
-            }}
-          />
-        ) : locked ? (
-          <MaterialCommunityIcons
-            name="lock-outline"
-            size={18}
-            color={THEME.mutedLight}
-            style={{
-              width: 28,
-            }}
-          />
-        ) : (
-          <MaterialCommunityIcons
-            name={icon}
-            size={20}
-            color={
-              danger
-                ? THEME.danger
-                : THEME.text
-            }
-            style={{
-              width: 28,
-            }}
-          />
-        )}
-
-        <Text
-          style={[
-            styles.drawerItemText,
-
-            danger &&
-              !locked && {
-                color: THEME.danger,
-              },
-
-            locked && {
-              color: THEME.mutedLight,
-            },
-          ]}
-        >
-          {loading
-            ? 'Logging out...'
-            : label}
-        </Text>
-      </Pressable>
     </Animated.View>
   );
 }
@@ -914,25 +791,12 @@ export default function DashboardScreen({
     setDashboardData,
   ] = useState<any>(null);
 
-  const [drawerOpen, setDrawerOpen] =
-    useState(false);
-
-  const [
-    drawerVisible,
-    setDrawerVisible,
-  ] = useState(false);
-
   const [loggingOut, setLoggingOut] =
     useState(false);
 
   const [
     sessionExpiredVisible,
     setSessionExpiredVisible,
-  ] = useState(false);
-
-  const [
-    logoutConfirmVisible,
-    setLogoutConfirmVisible,
   ] = useState(false);
 
   const [
@@ -944,8 +808,6 @@ export default function DashboardScreen({
     revenueHidden,
     setRevenueHidden,
   ] = useState(false);
-
-  const insets = useSafeAreaInsets();
 
   const { apiRequest } = useAuthApi();
 
@@ -992,22 +854,6 @@ export default function DashboardScreen({
     new Animated.Value(0),
   ).current;
 
-  const drawerAnim = useRef(
-    new Animated.Value(0),
-  ).current;
-
-  const overlayAnim = useRef(
-    new Animated.Value(0),
-  ).current;
-
-  const itemGroupAnim = useRef(
-    new Animated.Value(0),
-  ).current;
-
-  const swipeTranslateX = useRef(
-    new Animated.Value(0),
-  ).current;
-
   const clockSpin = useRef(
     new Animated.Value(0),
   ).current;
@@ -1026,66 +872,6 @@ export default function DashboardScreen({
 
   const contentY = useRef(
     new Animated.Value(12),
-  ).current;
-
-  const drawerPanRef = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (
-        _,
-        gesture,
-      ) =>
-        gesture.dx < -8 &&
-        Math.abs(gesture.dy) < 30,
-
-      onPanResponderMove: (
-        _,
-        gesture,
-      ) => {
-        if (gesture.dx < 0) {
-          swipeTranslateX.setValue(
-            gesture.dx,
-          );
-        }
-      },
-
-      onPanResponderRelease: (
-        _,
-        gesture,
-      ) => {
-        if (
-          gesture.dx < -60 ||
-          gesture.vx < -0.5
-        ) {
-          Animated.timing(
-            swipeTranslateX,
-            {
-              toValue:
-                -DRAWER_WIDTH,
-
-              duration: 220,
-
-              easing: Easing.in(
-                Easing.cubic,
-              ),
-
-              useNativeDriver: true,
-            },
-          ).start(() =>
-            setDrawerOpen(false),
-          );
-        } else {
-          Animated.spring(
-            swipeTranslateX,
-            {
-              toValue: 0,
-              friction: 16,
-              tension: 80,
-              useNativeDriver: true,
-            },
-          ).start();
-        }
-      },
-    }),
   ).current;
 
   if (route?.params?.user) {
@@ -1127,17 +913,6 @@ export default function DashboardScreen({
 
   const canAccessLeads =
     canAccess('lead');
-
-  const closeDrawer = useCallback(
-    () => setDrawerOpen(false),
-    [],
-  );
-
-  useEffect(() => {
-    navigation.setParams({
-      hideTabBar: drawerOpen,
-    });
-  }, [drawerOpen, navigation]);
 
   const fetchDashboard =
     useCallback(
@@ -1322,98 +1097,6 @@ export default function DashboardScreen({
     loading,
     skeletonAnim,
   ]);
-
-  useEffect(() => {
-    if (drawerOpen) {
-      swipeTranslateX.setValue(0);
-      setDrawerVisible(true);
-
-      Animated.parallel([
-        Animated.spring(
-          drawerAnim,
-          {
-            toValue: 1,
-            friction: 18,
-            tension: 80,
-            useNativeDriver: true,
-          },
-        ),
-
-        Animated.timing(
-          overlayAnim,
-          {
-            toValue: 1,
-            duration: 280,
-            easing: Easing.out(
-              Easing.quad,
-            ),
-            useNativeDriver: true,
-          },
-        ),
-
-        Animated.timing(
-          itemGroupAnim,
-          {
-            toValue: 1,
-            duration: 380,
-            delay: 160,
-            easing: Easing.out(
-              Easing.cubic,
-            ),
-            useNativeDriver: true,
-          },
-        ),
-      ]).start();
-          } else {
-      Animated.parallel([
-        Animated.timing(drawerAnim, {
-          toValue: 0,
-          duration: 260,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-
-        Animated.timing(overlayAnim, {
-          toValue: 0,
-          duration: 220,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-
-        Animated.timing(itemGroupAnim, {
-          toValue: 0,
-          duration: 140,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setDrawerVisible(false);
-        swipeTranslateX.setValue(0);
-      });
-    }
-  }, [
-    drawerAnim,
-    drawerOpen,
-    itemGroupAnim,
-    overlayAnim,
-    swipeTranslateX,
-  ]);
-
-  useEffect(() => {
-    const subscription =
-      BackHandler.addEventListener(
-        'hardwareBackPress',
-        () => {
-          if (drawerOpen) {
-            closeDrawer();
-            return true;
-          }
-
-          return false;
-        },
-      );
-
-    return () => subscription.remove();
-  }, [closeDrawer, drawerOpen]);
 
   useEffect(
     () => subscribeBadge(setNotifCount),
@@ -1695,46 +1378,9 @@ export default function DashboardScreen({
 
       setLoggingOut(false);
 
-      closeDrawer();
-
       navigation.replace('Login');
     }
   };
-
-  const openScreen = (
-    screen: string,
-  ) => {
-    closeDrawer();
-    navigation.navigate(screen);
-  };
-
-  const drawerTranslateX =
-    drawerAnim.interpolate({
-      inputRange: [0, 1],
-
-      outputRange: [
-        -DRAWER_WIDTH - 44,
-        0,
-      ],
-    });
-
-  const drawerOpacity =
-    drawerAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.3, 1],
-    });
-
-  const drawerScale =
-    drawerAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.98, 1],
-    });
-
-  const overlayOpacity =
-    overlayAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    });
 
   const spinClockwise =
     clockSpin.interpolate({
@@ -2004,20 +1650,6 @@ export default function DashboardScreen({
               },
             ]}
           >
-            <TouchableOpacity
-              onPress={() =>
-                setDrawerOpen(true)
-              }
-              style={styles.menuBtn}
-              activeOpacity={0.85}
-            >
-              <MaterialCommunityIcons
-                name="widgets-outline"
-                size={20}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-
             <View style={styles.headerLeft}>
               <Text
                 style={
@@ -2114,28 +1746,9 @@ export default function DashboardScreen({
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.avatarBtn}
-                activeOpacity={0.85}
-                onPress={() =>
-                  navigation.navigate(
-                    'Profile',
-                    {
-                      user:
-                        _cachedDashboardUser ??
-                        user,
-                    },
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.avatarInitial
-                  }
-                >
-                  {initials}
-                </Text>
-              </TouchableOpacity>
+              <AccountMenu
+                navigation={navigation}
+              />
             </View>
           </Animated.View>
 
@@ -3044,324 +2657,6 @@ export default function DashboardScreen({
             </ScrollView>
           </View>
 
-          {drawerVisible && (
-            <View
-              style={styles.drawerLayer}
-              pointerEvents="box-none"
-            >
-              <Pressable
-                style={
-                  StyleSheet.absoluteFillObject
-                }
-                onPress={closeDrawer}
-              >
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.overlay,
-                    {
-                      opacity:
-                        overlayOpacity,
-                    },
-                  ]}
-                />
-              </Pressable>
-
-              <Animated.View
-                style={[
-                  styles.drawer,
-                  {
-                    width: DRAWER_WIDTH,
-
-                    paddingBottom:
-                      24 + insets.bottom,
-
-                    opacity:
-                      drawerOpacity,
-
-                    transform: [
-                      {
-                        translateX:
-                          Animated.add(
-                            drawerTranslateX,
-                            swipeTranslateX,
-                          ),
-                      },
-
-                      {
-                        scale:
-                          drawerScale,
-                      },
-                    ],
-                  },
-                ]}
-                {...drawerPanRef.panHandlers}
-              >
-                <View
-                  style={
-                    styles.drawerHeader
-                  }
-                >
-                  <View
-                    style={
-                      styles.drawerLogo
-                    }
-                  >
-                    <MaterialCommunityIcons
-                      name="shield-check-outline"
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                  </View>
-
-                  <View
-                    style={{
-                      flex: 1,
-                    }}
-                  >
-                    <Text
-                      style={
-                        styles.drawerBrand
-                      }
-                    >
-                      Supreme Energies
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.drawerRole
-                      }
-                    >
-                      {user?.is_superuser
-                        ? 'Super Admin'
-                        : user?.is_staff
-                          ? 'Staff'
-                          : 'Admin Portal'}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={closeDrawer}
-                    style={
-                      styles.closeBtn
-                    }
-                  >
-                    <MaterialCommunityIcons
-                      name="close"
-                      size={20}
-                      color={THEME.text}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {user && (
-                  <View
-                    style={
-                      styles.drawerUserChip
-                    }
-                  >
-                    <View
-                      style={
-                        styles.drawerUserAvatar
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.drawerUserInitial
-                        }
-                      >
-                        {(
-                          user.first_name?.[0] ??
-                          user.username?.[0] ??
-                          'U'
-                        ).toUpperCase()}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={{
-                        flex: 1,
-                      }}
-                    >
-                      <Text
-                        style={
-                          styles.drawerUserName
-                        }
-                      >
-                        {displayName}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.drawerUserEmail
-                        }
-                        numberOfLines={1}
-                      >
-                        {user.email ||
-                          activeUsername}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                <Animated.View
-                  style={{
-                    opacity:
-                      itemGroupAnim,
-
-                    transform: [
-                      {
-                        translateY:
-                          itemGroupAnim.interpolate(
-                            {
-                              inputRange: [
-                                0,
-                                1,
-                              ],
-
-                              outputRange: [
-                                8,
-                                0,
-                              ],
-                            },
-                          ),
-                      },
-                    ],
-                  }}
-                >
-                  <View
-                    style={
-                      styles.drawerSection
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.drawerSectionTitle
-                      }
-                    >
-                      Navigation
-                    </Text>
-
-                    <DrawerItem
-                      icon="home-analytics"
-                      label="Dashboard"
-                      onPress={() =>
-                        openScreen(
-                          'Dashboard',
-                        )
-                      }
-                      delay={0}
-                    />
-
-                    <DrawerItem
-                      icon="layers-triple-outline"
-                      label="Projects"
-                      onPress={() =>
-                        openScreen(
-                          'Projects',
-                        )
-                      }
-                      delay={70}
-                      locked={
-                        !canAccessProjects
-                      }
-                    />
-
-                    <DrawerItem
-                      icon="tools"
-                      label="Service"
-                      onPress={() =>
-                        openScreen(
-                          'Service',
-                        )
-                      }
-                      delay={140}
-                      locked={
-                        !canAccess(
-                          'service',
-                        )
-                      }
-                    />
-
-                    <DrawerItem
-                      icon="account-multiple-plus-outline"
-                      label="Leads"
-                      onPress={() =>
-                        openScreen('Leads')
-                      }
-                      delay={210}
-                      locked={
-                        !canAccessLeads
-                      }
-                    />
-
-                    <DrawerItem
-                      icon="shield-account-outline"
-                      label="Users"
-                      onPress={() =>
-                        openScreen('Users')
-                      }
-                      delay={280}
-                      locked={
-                        !canAccess('users')
-                      }
-                    />
-                  </View>
-
-                  <View
-                    style={
-                      styles.drawerSection
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.drawerSectionTitle
-                      }
-                    >
-                      Account
-                    </Text>
-
-                    <DrawerItem
-                      icon="logout-variant"
-                      label="Logout"
-                      onPress={() =>
-                        setLogoutConfirmVisible(
-                          true,
-                        )
-                      }
-                      danger
-                      delay={340}
-                      loading={
-                        loggingOut
-                      }
-                    />
-                  </View>
-                </Animated.View>
-
-                <View
-                  style={
-                    styles.drawerFooter
-                  }
-                >
-                  <Text
-                    style={
-                      styles.drawerFooterText
-                    }
-                  >
-                    Version 2.0.4
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.drawerFooterSub
-                    }
-                  >
-                    Secure session active
-                  </Text>
-                </View>
-              </Animated.View>
-            </View>
-          )}
         </View>
       </SafeAreaView>
 
@@ -3439,111 +2734,6 @@ export default function DashboardScreen({
           </View>
         </View>
       </Modal>
-
-      <Modal
-        visible={
-          logoutConfirmVisible
-        }
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        statusBarTranslucent
-        navigationBarTranslucent
-        onRequestClose={() =>
-          setLogoutConfirmVisible(
-            false,
-          )
-        }
-      >
-        <View
-          style={styles.modalOverlay}
-        >
-          <View
-            style={
-              styles.modalContainer
-            }
-          >
-            <View
-              style={[
-                styles.modalIconWrap,
-                {
-                  backgroundColor:
-                    THEME.dangerLight,
-                },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="logout"
-                size={34}
-                color={THEME.danger}
-              />
-            </View>
-
-            <Text
-              style={styles.modalTitle}
-            >
-              Confirm Logout
-            </Text>
-
-            <Text
-              style={
-                styles.modalMessage
-              }
-            >
-              Are you sure you want to
-              logout?
-            </Text>
-
-            <View
-              style={
-                styles.modalButtonRow
-              }
-            >
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.modalButtonCancel,
-                ]}
-                onPress={() =>
-                  setLogoutConfirmVisible(
-                    false,
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.modalButtonCancelText
-                  }
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.modalButtonConfirm,
-                ]}
-                onPress={() => {
-                  setLogoutConfirmVisible(
-                    false,
-                  );
-
-                  performLogout();
-                }}
-              >
-                <Text
-                  style={
-                    styles.modalButtonText
-                  }
-                >
-                  Logout
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -3571,16 +2761,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 22,
     paddingBottom: 36,
-  },
-
-  menuBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    backgroundColor: 'rgba(255,255,255,0.14)',
   },
 
   headerLeft: {
@@ -3657,23 +2837,6 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
     lineHeight: 10,
-  },
-
-  avatarBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.85)',
-  },
-
-  avatarInitial: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
   },
 
   contentArea: {
@@ -4210,172 +3373,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  drawerLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 100,
-    elevation: 100,
-  },
-
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,8,8,0.55)',
-  },
-
-  drawer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: '#FFFFFF',
-    zIndex: 101,
-    elevation: 101,
-    paddingTop:
-      Platform.OS === 'android'
-        ? 40
-        : 20,
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    borderTopRightRadius: 28,
-    borderBottomRightRadius: 28,
-    shadowColor: '#000000',
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: {
-      width: 8,
-      height: 0,
-    },
-  },
-
-  drawerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-
-  drawerLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    backgroundColor: THEME.primary,
-  },
-
-  drawerBrand: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: THEME.text,
-  },
-
-  drawerRole: {
-    fontSize: 11,
-    color: THEME.muted,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-
-  closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    backgroundColor: THEME.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  drawerUserChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.primarySoft,
-    borderRadius: 16,
-    padding: 10,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: THEME.primaryLight,
-  },
-
-  drawerUserAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    backgroundColor: THEME.primary,
-  },
-
-  drawerUserInitial: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-
-  drawerUserName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.text,
-  },
-
-  drawerUserEmail: {
-    fontSize: 10,
-    color: THEME.muted,
-    marginTop: 2,
-  },
-
-  drawerSection: {
-    marginTop: 8,
-  },
-
-  drawerSectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: THEME.muted,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-
-  drawerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 46,
-    borderRadius: 13,
-    paddingHorizontal: 12,
-    marginBottom: 4,
-    backgroundColor: THEME.bg,
-  },
-
-  drawerItemDanger: {
-    backgroundColor: THEME.dangerLight,
-  },
-
-  drawerItemText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.text,
-    marginLeft: 8,
-  },
-
-  drawerFooter: {
-    marginTop: 'auto',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: THEME.border,
-  },
-
-  drawerFooterText: {
-    fontSize: 11,
-    color: THEME.muted,
-    fontWeight: '700',
-  },
-
-  drawerFooterSub: {
-    fontSize: 10,
-    color: THEME.mutedLight,
-    marginTop: 2,
-  },
-
   blockedCard: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -4516,29 +3513,6 @@ const styles = StyleSheet.create({
 
   modalButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-
-  modalButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 12,
-  },
-
-  modalButtonCancel: {
-    backgroundColor: '#F3F4F6',
-    flex: 1,
-  },
-
-  modalButtonConfirm: {
-    backgroundColor: THEME.danger,
-    flex: 1,
-  },
-
-  modalButtonCancelText: {
-    color: THEME.text,
     fontWeight: '700',
     fontSize: 14,
   },

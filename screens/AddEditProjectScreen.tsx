@@ -589,6 +589,7 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
     const [paymentType, setPaymentType] = useState<'cash' | 'loan'>('cash');
     const [projectCategory, setProjectCategory] = useState<'RES' | 'COM'>('RES');   // ← NEW state
     const [remarks, setRemarks] = useState('');
+    const [locationLink, setLocationLink] = useState('');
     const [payments, setPayments] = useState<any[]>([]);
 
     // ── Image state (split into existing server images vs new local picks) ──
@@ -641,6 +642,7 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
                         setPaymentType(data.payment_type || 'cash');
                         setProjectCategory(data.category || 'RES');   // ← NEW
                         setRemarks(data.remarks || '');
+                        setLocationLink(data.location_link || '');
 
                         // Existing images — store id + absolute URL for display only
                         setExistingImages(
@@ -793,6 +795,7 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
             formData.append('payment_type', paymentType);
             formData.append('category', projectCategory);               // ← NEW
             formData.append('remarks', remarks.trim());
+            formData.append('location_link', locationLink.trim());
 
             // Only upload newly-picked local images (not existing server images)
             newImages.forEach(img => {
@@ -1048,6 +1051,15 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
                                                 placeholder="Optional notes about this project"
                                                 multiline
                                                 numberOfLines={3}
+                                            />
+                                        </FieldWrap>
+
+                                        <FieldWrap label="Location">
+                                            <StyledInput
+                                                value={locationLink}
+                                                onChangeText={(v: string) => setLocationLink(v)}
+                                                placeholder="Paste Google Maps share link"
+                                                keyboardType="url"
                                             />
                                         </FieldWrap>
                                     </View>

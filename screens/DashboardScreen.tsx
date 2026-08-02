@@ -809,6 +809,9 @@ export default function DashboardScreen({
     setRevenueHidden,
   ] = useState(false);
 
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [selectedLead, setSelectedLead] = useState<any>(null);
+
   const { apiRequest } = useAuthApi();
 
   const { canAccess } =
@@ -2231,14 +2234,7 @@ export default function DashboardScreen({
                                         styles.listRowBorder,
                                     ]}
                                     onPress={() =>
-                                      navigation.navigate(
-                                        'AddEditProject',
-                                        {
-                                          project,
-                                          onSuccess:
-                                            onRefresh,
-                                        },
-                                      )
+                                      setSelectedProject(project)
                                     }
                                   >
                                     <View
@@ -2434,14 +2430,7 @@ export default function DashboardScreen({
                                         styles.listRowBorder,
                                     ]}
                                     onPress={() =>
-                                      navigation.navigate(
-                                        'AddEditLead',
-                                        {
-                                          lead,
-                                          onSuccess:
-                                            onRefresh,
-                                        },
-                                      )
+                                      setSelectedLead(lead)
                                     }
                                   >
                                     <View
@@ -2659,6 +2648,222 @@ export default function DashboardScreen({
 
         </View>
       </SafeAreaView>
+
+      {/* Project details modal */}
+      <Modal
+        visible={!!selectedProject}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setSelectedProject(null)}
+      >
+        <View style={styles.detailOverlay}>
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle} numberOfLines={1}>
+                {selectedProject?.customer_name ||
+                  selectedProject?.name ||
+                  selectedProject?.project_name ||
+                  'Project'}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => setSelectedProject(null)}
+                style={styles.detailCloseBtn}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={18}
+                  color={THEME.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Status</Text>
+                <View
+                  style={[
+                    styles.detailStatusPill,
+                    { backgroundColor: getStatusStyle(selectedProject?.status || selectedProject?.status_display).bg },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.detailStatusPillText,
+                      { color: getStatusStyle(selectedProject?.status || selectedProject?.status_display).text },
+                    ]}
+                  >
+                    {getStatusStyle(selectedProject?.status || selectedProject?.status_display).label}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Mobile</Text>
+                <Text style={styles.detailValue}>
+                  {selectedProject?.mobile || selectedProject?.phone || '—'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Amount</Text>
+                <Text style={styles.detailValue}>
+                  {selectedProject?.total_amount
+                    ? formatCurrency(selectedProject.total_amount)
+                    : '—'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Created</Text>
+                <Text style={styles.detailValue}>
+                  {formatDate(selectedProject?.created_at) || '—'}
+                </Text>
+              </View>
+
+              {!!selectedProject?.quality && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Quality</Text>
+                  <Text style={styles.detailValue}>{selectedProject.quality}</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.detailEditBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                const project = selectedProject;
+                setSelectedProject(null);
+                navigation.navigate('AddEditProject', { project, onSuccess: onRefresh });
+              }}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.detailEditBtnText}>Edit Project</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Lead details modal */}
+      <Modal
+        visible={!!selectedLead}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setSelectedLead(null)}
+      >
+        <View style={styles.detailOverlay}>
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle} numberOfLines={1}>
+                {selectedLead?.customer_name || selectedLead?.name || 'Lead'}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => setSelectedLead(null)}
+                style={styles.detailCloseBtn}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={18}
+                  color={THEME.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Quality</Text>
+                <View
+                  style={[
+                    styles.detailStatusPill,
+                    { backgroundColor: getQualityStyle(selectedLead?.quality_name || selectedLead?.quality).bg },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.detailStatusPillText,
+                      { color: getQualityStyle(selectedLead?.quality_name || selectedLead?.quality).text },
+                    ]}
+                  >
+                    {getQualityStyle(selectedLead?.quality_name || selectedLead?.quality).label}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Mobile</Text>
+                <Text style={styles.detailValue}>{selectedLead?.mobile || '—'}</Text>
+              </View>
+
+              {!!selectedLead?.place && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Place</Text>
+                  <Text style={styles.detailValue}>{selectedLead.place}</Text>
+                </View>
+              )}
+
+              {!!selectedLead?.product_name && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Product</Text>
+                  <Text style={styles.detailValue}>{selectedLead.product_name}</Text>
+                </View>
+              )}
+
+              {!!selectedLead?.lead_source_name && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Source</Text>
+                  <Text style={styles.detailValue}>{selectedLead.lead_source_name}</Text>
+                </View>
+              )}
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Follow-up</Text>
+                <Text style={styles.detailValue}>
+                  {selectedLead?.follow_up_date
+                    ? formatDate(selectedLead.follow_up_date)
+                    : 'No follow-up'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Created</Text>
+                <Text style={styles.detailValue}>
+                  {formatDate(selectedLead?.created_at) || '—'}
+                </Text>
+              </View>
+
+              {!!selectedLead?.assigned_to && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Assigned to</Text>
+                  <Text style={styles.detailValue}>{selectedLead.assigned_to}</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.detailEditBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                const lead = selectedLead;
+                setSelectedLead(null);
+                navigation.navigate('AddEditLead', { lead, onSuccess: onRefresh });
+              }}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.detailEditBtnText}>Edit Lead</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={
@@ -3515,5 +3720,114 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+
+  detailOverlay: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: '78%',
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.borderLight,
+  },
+
+  detailTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.text,
+    marginRight: 10,
+  },
+
+  detailCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: THEME.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  detailBody: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.borderLight,
+  },
+
+  detailLabel: {
+    fontSize: 12.5,
+    color: THEME.muted,
+    fontWeight: '600',
+  },
+
+  detailValue: {
+    fontSize: 13.5,
+    color: THEME.text,
+    fontWeight: '700',
+    maxWidth: '60%',
+    textAlign: 'right',
+  },
+
+  detailStatusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+
+  detailStatusPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  detailEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.primary,
+    marginHorizontal: 18,
+    marginTop: 14,
+    marginBottom: 18,
+    paddingVertical: 12,
+    borderRadius: 30,
+  },
+
+  detailEditBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13.5,
+    marginLeft: 7,
   },
 });

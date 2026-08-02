@@ -2,6 +2,7 @@
   "expo": {
     "name": "Supreme",
     "slug": "supremeenergies",
+    "scheme": "supremeenergies",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/one.png",

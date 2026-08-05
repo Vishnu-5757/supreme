@@ -11,7 +11,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
-import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
+import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
 
 const { height } = Dimensions.get('window');
@@ -655,6 +655,7 @@ export default function ServiceScreen({ navigation }: any) {
         return;
       }
       fetchServices(1, false, searchQuery, statusFilter, levelFilter);
+      refreshBadgeFromServer();
     }, []),
   );
 

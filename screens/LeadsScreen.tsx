@@ -24,7 +24,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
-import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
+import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
 
 const { height } = Dimensions.get('window');
@@ -777,6 +777,8 @@ export default function LeadsScreen({ navigation, route }: any) {
       } else {
         fetchLeads(1, false, searchQuery, qualityFilter, statusFilter);
       }
+
+      refreshBadgeFromServer();
 
       // Notification deep-link: if a lead_id was passed (e.g. from a
       // follow_up_reminder tap), fetch that lead and open its edit screen.

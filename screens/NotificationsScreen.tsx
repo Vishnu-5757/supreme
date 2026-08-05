@@ -10,7 +10,7 @@ import {
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { clearBadge } from '../hooks/notifBadge';
+import { clearBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { SkeletonNotifCard } from '../components/Skeleton';
@@ -28,6 +28,7 @@ type NotificationItem = {
   read: boolean;
   lead_id?: number;
   project_id?: number;
+  stale?: boolean;
 };
 
 function formatTime(sentAt: string): string {
@@ -42,18 +43,53 @@ function formatTime(sentAt: string): string {
   return sent.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+// The title/body text ("Follow-up tomorrow") is static copy generated
+// by the backend at send time — it never updates itself. Anything older
+// than ~20h is stale relative-time wording, so flag it as overdue.
+function isStaleRelativeTime(sentAt: string): boolean {
+  const now = new Date();
+  const sent = new Date(sentAt);
+  const diffHours = (now.getTime() - sent.getTime()) / 3600000;
+  return diffHours >= 20;
+}
+
+// "Follow-up tomorrow" was written relative to sentAt. Once stale, swap
+// the word "tomorrow" (and "today") for the actual calendar date so the
+// text itself stops lying, instead of just badging it.
+function rewriteStaleText(text: string, sentAt: string): string {
+  if (!text) return text;
+
+  const sent = new Date(sentAt);
+  const followUpDate = new Date(sent);
+  followUpDate.setDate(followUpDate.getDate() + 1);
+
+  const formatted = followUpDate.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+  });
+
+  return text
+    .replace(/\btomorrow\b/gi, `on ${formatted}`)
+    .replace(/\btoday\b/gi, `on ${formatted}`);
+}
+
 function mapItems(results: any[], source: 'lead' | 'project'): NotificationItem[] {
-  return (results ?? []).map((n: any) => ({
-    id: n.id,
-    source,
-    title: n.title,
-    body: n.body,
-    time: formatTime(n.sent_at),
-    sentAt: n.sent_at,
-    read: n.is_read,
-    lead_id: n.lead_id,
-    project_id: n.project_id,
-  }));
+  return (results ?? []).map((n: any) => {
+    const stale = isStaleRelativeTime(n.sent_at);
+
+    return {
+      id: n.id,
+      source,
+      title: stale ? rewriteStaleText(n.title, n.sent_at) : n.title,
+      body: stale ? rewriteStaleText(n.body, n.sent_at) : n.body,
+      time: formatTime(n.sent_at),
+      sentAt: n.sent_at,
+      read: n.is_read,
+      lead_id: n.lead_id,
+      project_id: n.project_id,
+      stale,
+    };
+  });
 }
 
 export default function NotificationsScreen({ navigation, route }: any) {
@@ -114,6 +150,7 @@ export default function NotificationsScreen({ navigation, route }: any) {
           n => !n.read && !(n.id === item.id && n.source === item.source)
         ).length;
         onUnreadCount?.(newUnread);
+        refreshBadgeFromServer();
       } catch {}
     }
 
@@ -182,9 +219,21 @@ export default function NotificationsScreen({ navigation, route }: any) {
                   />
                 </View>
                 <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={[styles.cardTitle, item.read && styles.cardTitleRead]}>
-                    {item.title}
-                  </Text>
+                  <View style={styles.cardTitleRow}>
+                    <Text
+                      style={[styles.cardTitle, item.read && styles.cardTitleRead]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+
+                    {item.stale && (
+                      <View style={styles.staleBadge}>
+                        <Text style={styles.staleBadgeText}>Overdue</Text>
+                      </View>
+                    )}
+                  </View>
+
                   <Text style={styles.cardBody} numberOfLines={2}>{item.body}</Text>
                 </View>
                 <Text style={styles.time}>{item.time}</Text>
@@ -245,10 +294,33 @@ const styles = StyleSheet.create({
   },
   iconWrapProject: { backgroundColor: 'rgba(3,105,161,0.08)' },
 
-  cardTitle:     { fontSize: 14, fontWeight: '800', color: '#0F172A' },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  cardTitle:     { fontSize: 14, fontWeight: '800', color: '#0F172A', flexShrink: 1 },
   cardTitleRead: { fontWeight: '600', color: '#475569' },
   cardBody: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 3 },
   time:     { fontSize: 11, fontWeight: '700', color: '#94A3B8', maxWidth: 72, textAlign: 'right' },
+
+  staleBadge: {
+    marginLeft: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#FEE2E2',
+  },
+  staleBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B91C1C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  staleHint: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#B91C1C',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
 
   emptyWrap: {
     flex: 1,

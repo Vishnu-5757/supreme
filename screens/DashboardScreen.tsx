@@ -13,6 +13,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,
@@ -44,6 +45,7 @@ import {
   clearBadge,
   getBadgeCount,
   subscribeBadge,
+  refreshBadgeFromServer,
 } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
 
@@ -242,6 +244,30 @@ const safeText = (
   value === null || value === undefined
     ? fallback
     : String(value);
+
+const callNumber = (number?: string) => {
+  if (!number) return;
+  Linking.openURL(`tel:${number}`).catch(() => {});
+};
+
+const formatPhoneNumber = (raw?: string): string => {
+  if (!raw) return '';
+
+  const digits = raw.replace(/\D/g, '');
+
+  // 10-digit Indian mobile number → 98765 43210
+  if (digits.length === 10) {
+    return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+
+  // With country code 91 → +91 98765 43210
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  }
+
+  // Fallback: return as-is, trimmed
+  return raw.trim();
+};
 
 function StatCard({
   label,
@@ -1245,6 +1271,7 @@ export default function DashboardScreen({
           userCache.current.username,
         );
       }
+      refreshBadgeFromServer();
     }, []),
   );
 
@@ -2704,9 +2731,34 @@ export default function DashboardScreen({
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Mobile</Text>
-                <Text style={styles.detailValue}>
-                  {selectedProject?.mobile || selectedProject?.phone || '—'}
-                </Text>
+
+                {selectedProject?.mobile || selectedProject?.phone ? (
+                  <TouchableOpacity
+                    style={styles.detailCallRow}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      callNumber(selectedProject?.mobile || selectedProject?.phone)
+                    }
+                  >
+                    <Text
+                      style={[styles.detailValue, styles.detailValueLink]}
+                      numberOfLines={1}
+                      ellipsizeMode="clip"
+                    >
+                      {formatPhoneNumber(selectedProject?.mobile || selectedProject?.phone)}
+                    </Text>
+
+                    <View style={styles.detailCallIconWrap}>
+                      <MaterialCommunityIcons
+                        name="phone-outline"
+                        size={13}
+                        color={THEME.success}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.detailValue}>—</Text>
+                )}
               </View>
 
               <View style={styles.detailRow}>
@@ -2801,7 +2853,32 @@ export default function DashboardScreen({
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Mobile</Text>
-                <Text style={styles.detailValue}>{selectedLead?.mobile || '—'}</Text>
+
+                {selectedLead?.mobile ? (
+                  <TouchableOpacity
+                    style={styles.detailCallRow}
+                    activeOpacity={0.7}
+                    onPress={() => callNumber(selectedLead?.mobile)}
+                  >
+                    <Text
+                      style={[styles.detailValue, styles.detailValueLink]}
+                      numberOfLines={1}
+                      ellipsizeMode="clip"
+                    >
+                      {formatPhoneNumber(selectedLead?.mobile)}
+                    </Text>
+
+                    <View style={styles.detailCallIconWrap}>
+                      <MaterialCommunityIcons
+                        name="phone-outline"
+                        size={13}
+                        color={THEME.success}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.detailValue}>—</Text>
+                )}
               </View>
 
               {!!selectedLead?.place && (
@@ -3799,6 +3876,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     maxWidth: '60%',
     textAlign: 'right',
+  },
+
+  detailValueLink: {
+    color: THEME.success,
+    maxWidth: undefined,
+    flexShrink: 1,
+    letterSpacing: 0.3,
+  },
+
+  detailCallRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    maxWidth: '68%',
+  },
+
+  detailCallIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: THEME.successLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 7,
   },
 
   detailStatusPill: {

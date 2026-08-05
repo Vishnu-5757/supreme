@@ -21,5 +21,9 @@ allprojects {
   }
 }
 
+subprojects {
+  buildDir = "C:/AndroidBuild/SE/${project.name}"
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"

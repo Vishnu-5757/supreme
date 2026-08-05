@@ -22,6 +22,7 @@ import { API_BASE_URL } from '../config';
 import { setAuthTokens } from '../hooks/useAuthApi';
 import { clearPermissionsCache } from '../hooks/usePermissions';
 import { registerForPushNotificationsAsync } from '../hooks/useNotifications';
+import { refreshBadgeFromServer } from '../hooks/notifBadge';
 
 const { height } = Dimensions.get('window');
 
@@ -291,6 +292,7 @@ export default function LoginScreen({ navigation }: any) {
       // Fire-and-forget: register this device for push notifications now that
       // the auth token is available. Won't block navigation.
       registerForPushNotificationsAsync();
+      refreshBadgeFromServer();
 
       navigation.replace('MainTabs', {
         screen: 'Dashboard',

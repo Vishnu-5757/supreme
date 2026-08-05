@@ -24,7 +24,7 @@ import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
 import { usePermissionContext } from '../hooks/PermissionContext';
-import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
+import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
 
 const { height } = Dimensions.get('window');
@@ -766,6 +766,7 @@ export default function ProjectsScreen({ navigation }: any) {
         return;
       }
       fetchProjects(1, false, searchQuery, paymentFilter);
+      refreshBadgeFromServer();
     }, []),
   );
 

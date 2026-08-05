@@ -19,7 +19,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
-import { clearBadge, getBadgeCount, subscribeBadge } from '../hooks/notifBadge';
+import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
 
 const { width } = Dimensions.get('window');
@@ -416,6 +416,7 @@ export default function UsersScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       fetchUsers(1, false);
+      refreshBadgeFromServer();
     }, [])
   );
 

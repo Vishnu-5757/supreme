@@ -21,6 +21,7 @@ import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
+import { SkeletonRow } from '../components/Skeleton';
 
 const { width } = Dimensions.get('window');
 
@@ -369,6 +370,9 @@ export default function UsersScreen({ navigation }: any) {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const initialLoadDone = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fabAnim = useRef(new Animated.Value(1)).current;
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -406,11 +410,15 @@ export default function UsersScreen({ navigation }: any) {
 };
 
   useEffect(() => {
-    if (initialLoadDone.current) {
-      fetchUsers(1, false);
-    } else {
+    if (!initialLoadDone.current) {
       initialLoadDone.current = true;
+      return;
     }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchUsers(1, false);
+    }, 400);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
   }, [searchQuery, roleFilter]);
 
   useFocusEffect(
@@ -463,17 +471,29 @@ export default function UsersScreen({ navigation }: any) {
   const totalUsers = totalCount;
   const activeUsers = users.filter(u => u.is_active).length;
 
+  const handleFabScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    lastScrollY.current = y;
+    if (dy > 8 && y > 60) {
+      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    } else if (dy < -8) {
+      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+    }
+  }, []);
+
   const renderFooter = () => {
     if (!loadingMore) return null;
     return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={THEME.primary} />
-        <Text style={styles.footerLoaderText}>Loading more...</Text>
+      <View style={{ paddingTop: 6 }}>
+        <SkeletonRow style={{ marginBottom: 10 }} />
+        <SkeletonRow style={{ marginBottom: 10 }} />
+        <SkeletonRow />
       </View>
     );
   };
 
-  if (loading && !refreshing && users.length === 0) {
+  if (loading && !refreshing && users.length === 0 && !searchQuery && !roleFilter) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.bg }}>
         <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
@@ -588,7 +608,7 @@ export default function UsersScreen({ navigation }: any) {
               onDelete={(u: any) => setDeleteTarget(u)}
             />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 90 + insets.bottom + 72 }]}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.primary} colors={[THEME.primary]} />
@@ -611,16 +631,26 @@ export default function UsersScreen({ navigation }: any) {
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={renderFooter}
+          onScroll={handleFabScroll}
           scrollEventThrottle={16}
         />
 
-        <TouchableOpacity
-          style={[styles.fab, { bottom: 90 + insets.bottom }]}
-          onPress={() => navigation.navigate('AddUser')}
-          activeOpacity={0.85}
-        >
-          <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
-        </TouchableOpacity>
+        <Animated.View style={[styles.fab, {
+          bottom: 90 + insets.bottom,
+          opacity: fabAnim,
+          transform: [
+            { scale: fabAnim },
+            { translateY: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
+          ],
+        }]}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AddUser')}
+            activeOpacity={0.85}
+            style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
+          </TouchableOpacity>
+        </Animated.View>
         </View>
 
         {/* ── ROLE DROPDOWN ── */}

@@ -26,6 +26,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { usePermissionContext } from '../hooks/PermissionContext';
 import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
+import { SkeletonRow } from '../components/Skeleton';
 
 const { height } = Dimensions.get('window');
 
@@ -707,6 +708,9 @@ export default function ProjectsScreen({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const isFetching = useRef(false);
   const mountFetchDone = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fabAnim = useRef(new Animated.Value(1)).current;
+  const lastScrollY = useRef(0);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
@@ -756,7 +760,11 @@ export default function ProjectsScreen({ navigation }: any) {
   );
 
   useEffect(() => {
-    fetchProjects(1, false, searchQuery, paymentFilter);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchProjects(1, false, searchQuery, paymentFilter);
+    }, 400);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
   }, [searchQuery, paymentFilter]);
 
   useFocusEffect(
@@ -780,6 +788,17 @@ export default function ProjectsScreen({ navigation }: any) {
       fetchProjects(currentPage + 1, true, searchQuery, paymentFilter);
     }
   }, [hasNextPage, loadingMore, loading, refreshing, currentPage, fetchProjects, searchQuery, paymentFilter]);
+
+  const handleFabScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    lastScrollY.current = y;
+    if (dy > 8 && y > 60) {
+      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    } else if (dy < -8) {
+      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+    }
+  }, []);
 
   const navigateToAddProject = () => {
     navigation.navigate('AddEditProject', {
@@ -858,7 +877,7 @@ export default function ProjectsScreen({ navigation }: any) {
     openDetail(project);
   };
 
-  if (loading && !refreshing && projects.length === 0) {
+  if (loading && !refreshing && projects.length === 0 && !searchQuery && !paymentFilter) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.bg }}>
         <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
@@ -970,7 +989,7 @@ export default function ProjectsScreen({ navigation }: any) {
           renderItem={({ item, index }) => (
             <ProjectCard project={item} index={index} onPress={() => cardPress(item)} onOpenLocation={handleOpenLocation} />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 90 + insets.bottom + 72 }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.primary} colors={[THEME.primary]} />
           }
@@ -992,22 +1011,34 @@ export default function ProjectsScreen({ navigation }: any) {
           onEndReachedThreshold={0.3}
           ListFooterComponent={
             loadingMore ? (
-              <View style={styles.footerLoader}>
-                <ActivityIndicator size="small" color={THEME.primary} />
-                <Text style={styles.footerLoaderText}>Loading more...</Text>
+              <View style={{ paddingTop: 6 }}>
+                <SkeletonRow style={{ marginBottom: 10 }} />
+                <SkeletonRow style={{ marginBottom: 10 }} />
+                <SkeletonRow />
               </View>
             ) : null
           }
+          onScroll={handleFabScroll}
+          scrollEventThrottle={16}
         />
 
         {canAdd && (
-          <TouchableOpacity
-            style={[styles.fab, { bottom: 90 + insets.bottom }]}
-            onPress={navigateToAddProject}
-            activeOpacity={0.85}
-          >
-            <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
-          </TouchableOpacity>
+          <Animated.View style={[styles.fab, {
+            bottom: 90 + insets.bottom,
+            opacity: fabAnim,
+            transform: [
+              { scale: fabAnim },
+              { translateY: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
+            ],
+          }]}>
+            <TouchableOpacity
+              onPress={navigateToAddProject}
+              activeOpacity={0.85}
+              style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
+            </TouchableOpacity>
+          </Animated.View>
         )}
         </View>
 

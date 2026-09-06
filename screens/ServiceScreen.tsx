@@ -13,6 +13,7 @@ import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { AccountMenu } from '../components/AccountMenu';
+import { SkeletonRow } from '../components/Skeleton';
 
 const { height } = Dimensions.get('window');
 
@@ -595,6 +596,9 @@ export default function ServiceScreen({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const isFetching = useRef(false);
   const mountFetchDone = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fabAnim = useRef(new Animated.Value(1)).current;
+  const lastScrollY = useRef(0);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
@@ -645,7 +649,11 @@ export default function ServiceScreen({ navigation }: any) {
   );
 
   useEffect(() => {
-    fetchServices(1, false, searchQuery, statusFilter, levelFilter);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchServices(1, false, searchQuery, statusFilter, levelFilter);
+    }, 400);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
   }, [searchQuery, statusFilter, levelFilter]);
 
   useFocusEffect(
@@ -722,6 +730,17 @@ export default function ServiceScreen({ navigation }: any) {
     }
   };
 
+  const handleFabScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    lastScrollY.current = y;
+    if (dy > 8 && y > 60) {
+      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    } else if (dy < -8) {
+      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+    }
+  }, []);
+
   const navigateToAdd = () => {
     navigation.navigate('AddEditService', {
       onSuccess: () => fetchServices(1, false, searchQuery, statusFilter, levelFilter),
@@ -767,7 +786,7 @@ export default function ServiceScreen({ navigation }: any) {
 
   const activeFilterCount = statusFilter.length + levelFilter.length;
 
-  if (loading && !refreshing && services.length === 0) {
+  if (loading && !refreshing && services.length === 0 && !searchQuery && statusFilter.length === 0 && levelFilter.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.bg }}>
         <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
@@ -873,7 +892,7 @@ export default function ServiceScreen({ navigation }: any) {
             data={services}
             keyExtractor={item => item.id.toString()}
             renderItem={({ item, index }) => <ServiceCard service={item} index={index} onPress={() => openDetail(item)} />}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: 90 + insets.bottom + 72 }]}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.primary} colors={[THEME.primary]} />
             }
@@ -893,21 +912,33 @@ export default function ServiceScreen({ navigation }: any) {
             onEndReachedThreshold={0.3}
             ListFooterComponent={
               loadingMore ? (
-                <View style={styles.footerLoader}>
-                  <ActivityIndicator size="small" color={THEME.primary} />
-                  <Text style={styles.footerLoaderText}>Loading more...</Text>
+                <View style={{ paddingTop: 6 }}>
+                  <SkeletonRow style={{ marginBottom: 10 }} />
+                  <SkeletonRow style={{ marginBottom: 10 }} />
+                  <SkeletonRow />
                 </View>
               ) : null
             }
+            onScroll={handleFabScroll}
+            scrollEventThrottle={16}
           />
 
-          <TouchableOpacity
-            style={[styles.fab, { bottom: 90 + insets.bottom }]}
-            onPress={navigateToAdd}
-            activeOpacity={0.85}
-          >
-            <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
-          </TouchableOpacity>
+          <Animated.View style={[styles.fab, {
+            bottom: 90 + insets.bottom,
+            opacity: fabAnim,
+            transform: [
+              { scale: fabAnim },
+              { translateY: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
+            ],
+          }]}>
+            <TouchableOpacity
+              onPress={navigateToAdd}
+              activeOpacity={0.85}
+              style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <MaterialCommunityIcons name="plus" size={26} color="#FFF" />
+            </TouchableOpacity>
+          </Animated.View>
           </View>
         </Animated.View>
       </SafeAreaView>

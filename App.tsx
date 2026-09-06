@@ -1,5 +1,5 @@
 // App.tsx – Dashboard header always visible, other tabs guarded
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Easing, Modal, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import {
   NavigationContainer,
@@ -11,7 +11,7 @@ import Constants from 'expo-constants';
 // One-time env check — 'storeClient' = Expo Go, 'standalone'/'bare' = real build
 console.log('[EnvCheck] executionEnvironment:', Constants.executionEnvironment);
 import { createStackNavigator } from '@react-navigation/stack';
-import { set403Callback } from './hooks/useAuthApi';
+import { set403Callback, setForceLogoutCallback, clearAuthTokens, loadStoredTokens } from './hooks/useAuthApi';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -102,9 +102,28 @@ function LoadingScreen({ title }: { title?: string }) {
 
 function SplashScreen() {
   const navigation = useNavigation<any>();
-  return (
-    <SplashScreenView onFinish={() => navigation.replace('Login')} />
-  );
+  const hasTokensRef = useRef<boolean>(false);
+  const storedUserRef = useRef<any>(null);
+
+  useEffect(() => {
+    loadStoredTokens().then(result => {
+      hasTokensRef.current = result.valid;
+      storedUserRef.current = result.user ?? null;
+    });
+  }, []);
+
+  const handleFinish = () => {
+    if (hasTokensRef.current) {
+      navigation.replace('MainTabs', {
+        screen: 'Dashboard',
+        params: { user: storedUserRef.current },
+      });
+    } else {
+      navigation.replace('Login');
+    }
+  };
+
+  return <SplashScreenView onFinish={handleFinish} />;
 }
 
 // ── Guarded screens for all tabs EXCEPT Dashboard ──
@@ -171,6 +190,19 @@ function MainApp() {
   useEffect(() => {
     set403Callback(msg => setForbidden({ visible: true, message: msg }));
     return () => set403Callback(null);
+  }, []);
+
+  useEffect(() => {
+    setForceLogoutCallback((msg: string) => {
+      clearAuthTokens();
+      if (navigationRef.isReady()) {
+        navigationRef.reset({
+          index: 0,
+          routes: [{ name: 'Login' as never, params: { forceLogoutMessage: msg } }],
+        });
+      }
+    });
+    return () => setForceLogoutCallback(null);
   }, []);
 
   return (

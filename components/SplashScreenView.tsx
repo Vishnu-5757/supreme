@@ -25,7 +25,7 @@ export default function SplashScreenView({ onFinish }: Props) {
     <View style={styles.container}>
       <StatusBar hidden />
       <Image
-        source={require('../assets/splash.png')}
+        source={require('../assets/splash-fixed.png')}
         style={styles.image}
         resizeMode="cover"
       />

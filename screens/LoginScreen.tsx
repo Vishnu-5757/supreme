@@ -19,7 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { API_BASE_URL } from '../config';
-import { setAuthTokens } from '../hooks/useAuthApi';
+import { setAuthTokens, persistUserProfile } from '../hooks/useAuthApi';
 import { clearPermissionsCache } from '../hooks/usePermissions';
 import { registerForPushNotificationsAsync } from '../hooks/useNotifications';
 import { refreshBadgeFromServer } from '../hooks/notifBadge';
@@ -111,7 +111,7 @@ function FloatingInput({
   );
 }
 
-export default function LoginScreen({ navigation }: any) {
+export default function LoginScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -119,6 +119,15 @@ export default function LoginScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'error' | 'success' | ''>('');
+
+  // Show forced-logout notice when arriving after a device-limit blacklist
+  useEffect(() => {
+    const msg = route?.params?.forceLogoutMessage;
+    if (msg) {
+      setMessage(msg);
+      setMessageType('error');
+    }
+  }, [route?.params?.forceLogoutMessage]);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   const usernameRef = useRef<TextInput>(null);
@@ -288,6 +297,7 @@ export default function LoginScreen({ navigation }: any) {
       setMessageType('');
 
       setAuthTokens(data.access, data.refresh);
+      persistUserProfile(data.user);
       clearPermissionsCache();
       // Fire-and-forget: register this device for push notifications now that
       // the auth token is available. Won't block navigation.
@@ -576,6 +586,7 @@ const styles = StyleSheet.create({
     minHeight: 20,
     justifyContent: 'center',
     marginBottom: 6,
+    paddingHorizontal: 4,
   },
   messageText: {
     fontSize: 12.5,

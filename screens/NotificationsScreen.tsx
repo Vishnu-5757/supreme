@@ -6,9 +6,12 @@ import {
   StatusBar,
   FlatList,
   TouchableOpacity,
+  Modal,
+  Linking,
+  Pressable,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
 import { useAuthApi } from '../hooks/useAuthApi';
@@ -29,6 +32,8 @@ type NotificationItem = {
   lead_id?: number;
   project_id?: number;
   stale?: boolean;
+  customerName?: string;
+  mobile?: string;
 };
 
 function formatTime(sentAt: string): string {
@@ -41,6 +46,18 @@ function formatTime(sentAt: string): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   if (Math.floor(diffHours / 24) === 1) return 'Yesterday';
   return sent.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+function formatSentAt(sentAt: string): string {
+  const d = new Date(sentAt);
+  return d.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
 // The title/body text ("Follow-up tomorrow") is static copy generated
@@ -88,6 +105,8 @@ function mapItems(results: any[], source: 'lead' | 'project'): NotificationItem[
       lead_id: n.lead_id,
       project_id: n.project_id,
       stale,
+      customerName: source === 'lead' ? n.lead_customer_name : n.project_customer_name,
+      mobile: source === 'lead' ? n.lead_mobile : n.project_mobile,
     };
   });
 }
@@ -95,9 +114,11 @@ function mapItems(results: any[], source: 'lead' | 'project'): NotificationItem[
 export default function NotificationsScreen({ navigation, route }: any) {
   const { onUnreadCount } = route?.params ?? {};
   const { apiRequest } = useAuthApi();
+  const insets = useSafeAreaInsets();
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<NotificationItem | null>(null);
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
@@ -134,7 +155,8 @@ export default function NotificationsScreen({ navigation, route }: any) {
   );
 
   const handleTap = async (item: NotificationItem) => {
-    // Mark read via the correct base path
+    setSelectedItem(item);
+
     if (!item.read) {
       try {
         const base = item.source === 'lead' ? 'lead' : 'project';
@@ -152,16 +174,6 @@ export default function NotificationsScreen({ navigation, route }: any) {
         onUnreadCount?.(newUnread);
         refreshBadgeFromServer();
       } catch {}
-    }
-
-    // Navigate to the right screen
-    if (item.source === 'lead' && item.lead_id) {
-      navigation.navigate('MainTabs', {
-        screen: 'Leads',
-        params: { openLeadId: item.lead_id },
-      });
-    } else if (item.source === 'project' && item.project_id) {
-      navigation.navigate('ProjectTrackingScreen', { project_id: item.project_id });
     }
   };
 
@@ -201,7 +213,7 @@ export default function NotificationsScreen({ navigation, route }: any) {
             style={styles.list}
             data={notifications}
             keyExtractor={item => `${item.source}-${item.id}`}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 28 }]}
             ItemSeparatorComponent={() => <View style={styles.sep} />}
             onRefresh={fetchNotifications}
             refreshing={loading}
@@ -249,6 +261,98 @@ export default function NotificationsScreen({ navigation, route }: any) {
           />
         )}
       </SafeAreaView>
+
+      {/* ── Detail modal (centered card) ── */}
+      <Modal
+        visible={!!selectedItem}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedItem(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedItem(null)} />
+          {selectedItem && (
+            <View style={styles.card2}>
+              {/* Top row: source badge + close */}
+              <View style={styles.card2Header}>
+                <View style={[styles.sourceBadge, selectedItem.source === 'project' && styles.sourceBadgeProject]}>
+                  <MaterialCommunityIcons
+                    name={selectedItem.source === 'project' ? 'briefcase-clock-outline' : 'bell-badge-outline'}
+                    size={13}
+                    color={selectedItem.source === 'project' ? '#0369A1' : PRIMARY}
+                  />
+                  <Text style={[styles.sourceBadgeText, selectedItem.source === 'project' && styles.sourceBadgeTextProject]}>
+                    {selectedItem.source === 'project' ? 'Project Reminder' : 'Lead Reminder'}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.card2Close} onPress={() => setSelectedItem(null)} activeOpacity={0.7}>
+                  <MaterialCommunityIcons name="close" size={16} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Title */}
+              <Text style={styles.card2Title}>{selectedItem.title}</Text>
+
+              {/* Divider */}
+              <View style={styles.card2Divider} />
+
+              {/* Detail rows */}
+              <View style={styles.card2Rows}>
+                <View style={styles.card2Row}>
+                  <View style={styles.card2RowIcon}>
+                    <MaterialCommunityIcons name="text-box-outline" size={15} color="#64748B" />
+                  </View>
+                  <Text style={styles.card2RowText}>{selectedItem.body}</Text>
+                </View>
+
+                {!!selectedItem.customerName && (
+                  <View style={styles.card2Row}>
+                    <View style={styles.card2RowIcon}>
+                      <MaterialCommunityIcons name="account-outline" size={15} color="#64748B" />
+                    </View>
+                    <Text style={styles.card2RowText}>{selectedItem.customerName}</Text>
+                  </View>
+                )}
+
+                {!!selectedItem.mobile && (
+                  <View style={styles.card2Row}>
+                    <View style={styles.card2RowIcon}>
+                      <MaterialCommunityIcons name="phone-outline" size={15} color="#64748B" />
+                    </View>
+                    <Text style={styles.card2RowText}>{selectedItem.mobile}</Text>
+                  </View>
+                )}
+
+                <View style={styles.card2Row}>
+                  <View style={styles.card2RowIcon}>
+                    <MaterialCommunityIcons name="clock-outline" size={15} color="#64748B" />
+                  </View>
+                  <Text style={styles.card2RowText}>{formatSentAt(selectedItem.sentAt)}</Text>
+                </View>
+              </View>
+
+              {/* Call button */}
+              {!!selectedItem.mobile ? (
+                <TouchableOpacity
+                  style={styles.callBtn}
+                  activeOpacity={0.85}
+                  onPress={() => Linking.openURL(`tel:${selectedItem.mobile}`)}
+                >
+                  <MaterialCommunityIcons name="phone" size={18} color="#FFF" />
+                  <Text style={styles.callBtnText}>
+                    Call {selectedItem.customerName || 'Customer'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.noCallRow}>
+                  <MaterialCommunityIcons name="phone-off-outline" size={15} color="#94A3B8" />
+                  <Text style={styles.noCallText}>No contact number available</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -328,4 +432,79 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
   emptySub:   { fontSize: 13, fontWeight: '600', color: '#64748B', textAlign: 'center' },
+
+  // ── Centered detail modal ──
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 20,
+  },
+  card2: {
+    width: '100%',
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 20,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  card2Header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  sourceBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(142,28,28,0.08)',
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
+  },
+  sourceBadgeProject: { backgroundColor: 'rgba(3,105,161,0.08)' },
+  sourceBadgeText: {
+    fontSize: 11, fontWeight: '700', color: PRIMARY,
+  },
+  sourceBadgeTextProject: { color: '#0369A1' },
+  card2Close: {
+    width: 30, height: 30, borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  card2Title: {
+    fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 14,
+  },
+  card2Divider: {
+    height: 1, backgroundColor: '#F1F5F9', marginBottom: 14,
+  },
+  card2Rows: { gap: 10, marginBottom: 18 },
+  card2Row: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+  },
+  card2RowIcon: {
+    width: 24, height: 24, borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 1,
+  },
+  card2RowText: {
+    flex: 1, fontSize: 13, fontWeight: '600', color: '#475569', lineHeight: 20,
+  },
+  callBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#16A34A',
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  callBtnText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
+  noCallRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10,
+  },
+  noCallText: { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
 });

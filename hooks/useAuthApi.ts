@@ -1,7 +1,12 @@
 // hooks/useAuthApi.ts
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { jwtDecode } from 'jwt-decode';
+import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL } from '../config';
+
+const STORE_ACCESS  = 'auth_access_token';
+const STORE_REFRESH = 'auth_refresh_token';
+const STORE_USER    = 'auth_user_profile';
 
 // Global token storage
 let globalAccessToken: string | null = null;
@@ -13,6 +18,13 @@ let logoutTimer: NodeJS.Timeout | null = null;
 
 // Callback to be set by the app (e.g., from your navigation/context)
 let onSessionExpiredCallback: (() => void) | null = null;
+
+// Fired specifically when a refresh 401 indicates the token was blacklisted
+// (backend device-limit enforcement). Different from generic session expiry.
+let onForceLogoutCallback: ((message: string) => void) | null = null;
+export const setForceLogoutCallback = (cb: ((message: string) => void) | null) => {
+  onForceLogoutCallback = cb;
+};
 
 // Global 403 handler — set once in App, fired by every apiRequest that gets a 403
 let on403Callback: ((message: string) => void) | null = null;
@@ -51,7 +63,10 @@ const scheduleAutoLogout = () => {
 export const setAuthTokens = (access: string, refresh: string) => {
   globalAccessToken = access;
   globalRefreshToken = refresh;
-  scheduleAutoLogout(); // reset timer with new refresh token
+  scheduleAutoLogout();
+  // Persist to secure storage so tokens survive app restarts
+  SecureStore.setItemAsync(STORE_ACCESS,  access).catch(() => {});
+  SecureStore.setItemAsync(STORE_REFRESH, refresh).catch(() => {});
 };
 
 export const clearAuthTokens = () => {
@@ -60,6 +75,37 @@ export const clearAuthTokens = () => {
   if (logoutTimer) {
     clearTimeout(logoutTimer);
     logoutTimer = null;
+  }
+  SecureStore.deleteItemAsync(STORE_ACCESS).catch(() => {});
+  SecureStore.deleteItemAsync(STORE_REFRESH).catch(() => {});
+  SecureStore.deleteItemAsync(STORE_USER).catch(() => {});
+};
+
+// Store the user profile returned by the login API so it survives app restarts.
+export const persistUserProfile = (user: any) => {
+  if (!user) return;
+  SecureStore.setItemAsync(STORE_USER, JSON.stringify(user)).catch(() => {});
+};
+
+// Called once on app start (during splash). Returns { valid, user } so the
+// caller can skip Login and pass user profile to the Dashboard as params.
+export const loadStoredTokens = async (): Promise<{ valid: boolean; user?: any }> => {
+  try {
+    const [access, refresh, userJson] = await Promise.all([
+      SecureStore.getItemAsync(STORE_ACCESS),
+      SecureStore.getItemAsync(STORE_REFRESH),
+      SecureStore.getItemAsync(STORE_USER),
+    ]);
+    if (!access || !refresh) return { valid: false };
+    const expiry = getRefreshTokenExpiry(refresh);
+    if (!expiry || expiry <= Date.now()) return { valid: false };
+    globalAccessToken  = access;
+    globalRefreshToken = refresh;
+    scheduleAutoLogout();
+    const user = userJson ? JSON.parse(userJson) : undefined;
+    return { valid: true, user };
+  } catch {
+    return { valid: false };
   }
 };
 
@@ -81,17 +127,37 @@ const refreshAccessToken = async (): Promise<string | null> => {
       body: JSON.stringify({ refresh: globalRefreshToken }),
     });
     if (!response.ok) {
-      // Refresh token invalid/expired – trigger logout
-      if (onSessionExpiredCallback) onSessionExpiredCallback();
+      clearAuthTokens();
+      // Check if this is a blacklisted-token 401 (backend device-limit enforcement).
+      // Only then show the device-limit message; all other failures use generic expiry.
+      let isBlacklisted = false;
+      try {
+        const body = await response.clone().json();
+        if (
+          body?.code === 'token_not_valid' ||
+          String(body?.detail ?? '').toLowerCase().includes('blacklisted')
+        ) {
+          isBlacklisted = true;
+        }
+      } catch {}
+      if (isBlacklisted && onForceLogoutCallback) {
+        onForceLogoutCallback(
+          'You were logged out because your account signed in on another device (max 2 devices allowed).'
+        );
+      } else if (onSessionExpiredCallback) {
+        onSessionExpiredCallback();
+      }
       return null;
     }
     const data = await response.json();
     const newAccess = data.access;
     const newRefresh = data.refresh || globalRefreshToken;
-    globalAccessToken = newAccess;
+    globalAccessToken  = newAccess;
     globalRefreshToken = newRefresh;
-    // Reschedule auto-logout with new refresh token
     scheduleAutoLogout();
+    // Keep persisted tokens in sync with refreshed values
+    SecureStore.setItemAsync(STORE_ACCESS,  newAccess).catch(() => {});
+    if (data.refresh) SecureStore.setItemAsync(STORE_REFRESH, newRefresh!).catch(() => {});
     return newAccess;
   } catch (error) {
     console.warn('Token refresh request failed:', error);

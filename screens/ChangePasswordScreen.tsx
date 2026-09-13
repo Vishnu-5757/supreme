@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { API_BASE_URL } from '../config';
 import { useAuthApi } from '../hooks/useAuthApi';
+import { SuccessModal } from '../components/SuccessModal';
 
 const P = '#8E1C1C';
 
@@ -98,6 +99,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
   const [showConf, setShowConf] = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
+  const [success,  setSuccess]  = useState(false);
 
   const { apiRequest } = useAuthApi();
   const confRef = useRef<TextInput>(null);
@@ -119,7 +121,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
         body: JSON.stringify({ password: newPw }),
       });
       if (res.ok) {
-        navigation.goBack();
+        setSuccess(true);
       } else {
         const err = await res.json().catch(() => ({}));
         setError(err?.detail || err?.error || 'Could not update password.');
@@ -132,6 +134,12 @@ export default function ChangePasswordScreen({ navigation }: any) {
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={P} />
+      <SuccessModal
+        visible={success}
+        title="Password Updated"
+        message="Your password has been changed successfully."
+        onClose={() => { setSuccess(false); navigation.goBack(); }}
+      />
       <SafeAreaView style={{ flex: 1, backgroundColor: P }} edges={['top']}>
         <View style={s.topBar}>
           <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>

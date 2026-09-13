@@ -56,6 +56,7 @@ const BLANK_FORM = {
   password: '', confirm_password: '',
   is_active: true, is_staff: false, is_head: false, is_technician: false,
   app_permissions: [] as string[],
+  milestone_perms: [] as number[],
 };
 
 type FormData = typeof BLANK_FORM;
@@ -295,6 +296,32 @@ const acStyles = StyleSheet.create({
   check: { width: 14, height: 14, borderRadius: 7, backgroundColor: THEME.border, alignItems: 'center', justifyContent: 'center' },
 });
 
+// ─── Milestone Access (only shown when Project access = Full) ────────────────
+interface MilestoneDef { id: number; name: string; }
+
+const MilestoneChip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.8}
+    style={[msStyles.chip, selected && { borderColor: THEME.primary, backgroundColor: THEME.primaryLight }]}>
+    <View style={[msStyles.check, selected && { backgroundColor: THEME.primary, borderColor: THEME.primary }]}>
+      {selected && <MaterialCommunityIcons name="check" size={10} color="#FFF" />}
+    </View>
+    <Text style={[msStyles.chipLabel, selected && { color: THEME.primary, fontWeight: '700' }]} numberOfLines={1}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+const msStyles = StyleSheet.create({
+  card: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: THEME.border, padding: 12, marginBottom: 18 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  headerText: { fontSize: 11, fontWeight: '700', color: THEME.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  quickLink: { fontSize: 11, fontWeight: '700', color: THEME.primary },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1.5, borderColor: THEME.border, backgroundColor: '#FAFBFC', maxWidth: '100%' },
+  check: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: THEME.border, alignItems: 'center', justifyContent: 'center' },
+  chipLabel: { fontSize: 12, color: THEME.textSecondary },
+});
+
 // ─── ProjectCard (shows access level, opens picker on tap) ───────────────────
 const PROJECT_CFG: Record<ProjectAccess, { color: string; bg: string; label: string }> = {
   full: { color: THEME.success, bg: THEME.successLight, label: 'Full' },
@@ -466,6 +493,7 @@ export default function UserFormScreen({
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState<UniqueStatus>('idle');
   const [emailStatus, setEmailStatus] = useState<UniqueStatus>('idle');
+  const [milestoneCatalog, setMilestoneCatalog] = useState<MilestoneDef[]>([]);
 
   const [feedbackModal, setFeedbackModal] = useState<{
     visible: boolean;
@@ -495,6 +523,31 @@ export default function UserFormScreen({
         ? prev.app_permissions.filter(p => p !== id)
         : [...prev.app_permissions, id],
     }));
+
+  const toggleMilestone = (id: number) =>
+    setForm(prev => ({
+      ...prev,
+      milestone_perms: prev.milestone_perms.includes(id)
+        ? prev.milestone_perms.filter(p => p !== id)
+        : [...prev.milestone_perms, id],
+    }));
+
+  // Fetch the milestone catalog once (used to render the checkbox list and
+  // to know "all ids" for the All/None quick actions).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiRequest(`${API_BASE_URL}/users/api/milestones/`);
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) setMilestoneCatalog(data);
+      } catch {
+        // Non-fatal — Project access can still be set to Full without this
+        // list; the checkboxes just won't render if it fails to load.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const showModal = (
     type: 'success' | 'error' | 'info',
@@ -621,6 +674,22 @@ export default function UserFormScreen({
 
   const projectAccess = getProjectAccess(form.app_permissions);
 
+  // Switching INTO Full Access defaults every milestone to checked (so a
+  // newly full-access user isn't silently restricted by an empty
+  // selection) — only on the switch itself, never on initial load, so an
+  // existing legacy full-access user with genuinely zero granular grants
+  // still shows their real 0/9 state rather than a fake reset.
+  const handleProjectAccessChange = (access: ProjectAccess) => {
+    const wasFull = projectAccess === 'full';
+    setForm(prev => ({
+      ...prev,
+      app_permissions: setProjectAccess(prev.app_permissions, access),
+      milestone_perms: (!wasFull && access === 'full')
+        ? milestoneCatalog.map(m => m.id)
+        : prev.milestone_perms,
+    }));
+  };
+
   const avatarLetter = isEdit
     ? (initialData?.first_name?.[0] || initialData?.username?.[0] || 'U').toUpperCase()
     : null;
@@ -644,7 +713,7 @@ export default function UserFormScreen({
       <ProjectPickerModal
         visible={showProjectPicker}
         current={projectAccess}
-        onSelect={a => set('app_permissions')(setProjectAccess(form.app_permissions, a))}
+        onSelect={handleProjectAccessChange}
         onClose={() => setShowProjectPicker(false)}
       />
 
@@ -831,6 +900,37 @@ export default function UserFormScreen({
                 onPress={() => setShowProjectPicker(true)}
               />
             </View>
+
+            {projectAccess === 'full' && milestoneCatalog.length > 0 && (
+              <>
+                <SectionLabel icon="flag-checkered" title="Milestone Access" />
+                <View style={msStyles.card}>
+                  <View style={msStyles.headerRow}>
+                    <Text style={msStyles.headerText}>
+                      {form.milestone_perms.length} / {milestoneCatalog.length} editable
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <TouchableOpacity onPress={() => set('milestone_perms')(milestoneCatalog.map(m => m.id))}>
+                        <Text style={msStyles.quickLink}>All</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => set('milestone_perms')([])}>
+                        <Text style={msStyles.quickLink}>None</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <View style={msStyles.grid}>
+                    {milestoneCatalog.map(m => (
+                      <MilestoneChip
+                        key={m.id}
+                        label={m.name}
+                        selected={form.milestone_perms.includes(m.id)}
+                        onPress={() => toggleMilestone(m.id)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </>
+            )}
           </ScrollView>
 
           {/* Fixed Footer (pinned at bottom) */}

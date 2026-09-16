@@ -89,7 +89,7 @@ android {
 
     namespace 'com.bobx47.supremeenergies'
     defaultConfig {
-        applicationId 'com.bobx47.supremeenergies'
+        applicationId 'com.bobx47.solvingsolar'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

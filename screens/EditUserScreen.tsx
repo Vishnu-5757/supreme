@@ -21,6 +21,7 @@ export default function EditUserScreen({ navigation, route }: any) {
     is_head: !!user.profile?.is_head,
     is_technician: !!user.profile?.is_technician,
     app_permissions: Array.isArray(user.app_permissions) ? user.app_permissions : [],
+    milestone_perms: Array.isArray(user.milestone_perms) ? user.milestone_perms : [],
   };
 
   const handleSubmit = async (formData: any) => {
@@ -37,6 +38,7 @@ export default function EditUserScreen({ navigation, route }: any) {
         is_head: formData.is_head,
         is_technician: formData.is_technician,
         app_permissions: formData.app_permissions,
+        milestone_perms: formData.milestone_perms,
       };
 
       if (formData.password && formData.password.trim()) {

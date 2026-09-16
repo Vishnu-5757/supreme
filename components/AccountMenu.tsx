@@ -1,6 +1,7 @@
 // components/AccountMenu.tsx
 // Shared premium "account" dropdown (WhatsApp/Telegram style) — Profile,
-// Change Password, Logout — anchored under whatever avatar button triggers it.
+// Logout — anchored under whatever avatar button triggers it. Change
+// Password lives inside the Profile screen, not duplicated here.
 // Self-contained: reads the cached user, measures its own trigger position,
 // and owns the logout flow, so any screen can drop in <AccountMenu navigation={navigation} /> .
 
@@ -269,15 +270,6 @@ export function AccountMenu({ navigation }: { navigation: any }) {
               onPress={() => {
                 closeMenu();
                 navigation.navigate('Profile', { user });
-              }}
-            />
-
-            <MenuAction
-              icon="lock-reset"
-              label="Change Password"
-              onPress={() => {
-                closeMenu();
-                navigation.navigate('ChangePassword');
               }}
             />
 

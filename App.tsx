@@ -1,6 +1,6 @@
 // App.tsx – Dashboard header always visible, other tabs guarded
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Easing, Modal, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Modal, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import {
   NavigationContainer,
   createNavigationContainerRef,
@@ -10,7 +10,7 @@ import Constants from 'expo-constants';
 
 // One-time env check — 'storeClient' = Expo Go, 'standalone'/'bare' = real build
 console.log('[EnvCheck] executionEnvironment:', Constants.executionEnvironment);
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { set403Callback, setForceLogoutCallback, clearAuthTokens, loadStoredTokens } from './hooks/useAuthApi';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -36,6 +36,7 @@ import ProjectsScreen        from './screens/ProjectsScreen';
 import AddEditProjectScreen  from './screens/AddEditProjectScreen';
 import AddEditServiceScreen  from './screens/AddEditServiceScreen';
 import ProjectTrackingScreen from './screens/ProjectTrackingScreen';
+import ManagePaymentsScreen  from './screens/ManagePaymentsScreen';
 import NoAccessScreen        from './screens/NoAccessScreen';
 import NotificationsScreen   from './screens/NotificationsScreen';
 import ProfileScreen         from './screens/ProfileScreen';
@@ -53,48 +54,6 @@ setupForegroundHandler();
 const Stack = createStackNavigator();
 const Tab   = createBottomTabNavigator();
 const queryClient = new QueryClient();
-
-// Premium slide: incoming slides from right + subtle scale, outgoing dims + slides left
-function premiumSlide({ current, next, layouts }: any) {
-  const W = layouts.screen.width;
-  return {
-    cardStyle: next
-      ? {
-          // Screen being pushed behind: slide slightly left + dim
-          transform: [{
-            translateX: next.progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, -W * 0.22],
-            }),
-          }],
-          opacity: next.progress.interpolate({
-            inputRange: [0, 1],
-            outputRange: [1, 0.88],
-          }),
-        }
-      : {
-          // Incoming screen: slide from right + fade + subtle grow
-          transform: [
-            {
-              translateX: current.progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [W, 0],
-              }),
-            },
-            {
-              scale: current.progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.96, 1],
-              }),
-            },
-          ],
-          opacity: current.progress.interpolate({
-            inputRange: [0, 0.12, 1],
-            outputRange: [0, 1, 1],
-          }),
-        },
-  };
-}
 
 function LoadingScreen({ title }: { title?: string }) {
   return <AppScreenSkeleton title={title} />;
@@ -164,7 +123,11 @@ function TabGroup() {
       <Tab.Navigator
         tabBar={(props) => <BottomNavBar {...props} />}
         sceneContainerStyle={{ backgroundColor: '#F5F6F8' }}
-        screenOptions={{ headerShown: false, animation: 'fade' }}
+        // No cross-fade here — several tab screens paint a full-height
+        // maroon root, so a fade briefly overlaps two of those and reads
+        // as a solid red flash. An instant switch (standard for bottom
+        // tabs, since they're independent sections, not a stack) avoids it.
+        screenOptions={{ headerShown: false, animation: 'none' }}
       >
         <Tab.Screen name="Dashboard" component={DashboardScreen} />
         <Tab.Screen name="Service"   component={GuardedService} />
@@ -238,11 +201,11 @@ function MainApp() {
         headerShown: false,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
-        cardStyleInterpolator: premiumSlide,
-        transitionSpec: {
-          open:  { animation: 'timing', config: { duration: 340, easing: Easing.out(Easing.poly(4)) } },
-          close: { animation: 'timing', config: { duration: 280, easing: Easing.inOut(Easing.poly(4)) } },
-        },
+        cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        // Fills any gap the transition briefly exposes between screens —
+        // several screens paint their full-height root maroon, so leaving
+        // this transparent let that color flash through mid-transition.
+        cardStyle: { backgroundColor: '#F5F6F8' },
       }}
     >
       <Stack.Screen name="Splash"                component={SplashScreen} />
@@ -253,6 +216,7 @@ function MainApp() {
       <Stack.Screen name="AddEditLead"           component={AddEditLeadScreen} />
       <Stack.Screen name="AddEditProject"        component={AddEditProjectScreen} />
       <Stack.Screen name="ProjectTrackingScreen" component={ProjectTrackingScreen} />
+      <Stack.Screen name="ManagePayments"        component={ManagePaymentsScreen} />
       <Stack.Screen name="AddEditService"        component={AddEditServiceScreen} />
       <Stack.Screen name="Notifications"         component={NotificationsScreen} />
       <Stack.Screen name="Profile"               component={ProfileScreen} />

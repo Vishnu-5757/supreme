@@ -9,6 +9,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { API_BASE_URL } from '../config';
 import { useAuthApi } from '../hooks/useAuthApi';
 import { userCache } from '../hooks/userCache';
+import { SuccessModal } from '../components/SuccessModal';
 
 const P = '#8E1C1C';
 
@@ -72,6 +73,7 @@ export default function EditProfileScreen({ navigation, route }: any) {
   const [username, setUsername] = useState(user?.username ?? '');
   const [error,    setError]    = useState('');
   const [saving,   setSaving]   = useState(false);
+  const [success,  setSuccess]  = useState(false);
   const { apiRequest } = useAuthApi();
 
   const initial = (username?.[0] || 'U').toUpperCase();
@@ -88,7 +90,7 @@ export default function EditProfileScreen({ navigation, route }: any) {
       });
       if (res.ok) {
         if (userCache.current) userCache.current.username = username.trim();
-        navigation.goBack();
+        setSuccess(true);
       } else {
         const err = await res.json().catch(() => ({}));
         setError(err?.detail || err?.error || 'Could not update username.');
@@ -101,6 +103,12 @@ export default function EditProfileScreen({ navigation, route }: any) {
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={P} />
+      <SuccessModal
+        visible={success}
+        title="Username Updated"
+        message="Your username has been changed successfully."
+        onClose={() => { setSuccess(false); navigation.goBack(); }}
+      />
       <SafeAreaView style={{ flex: 1, backgroundColor: P }} edges={['top']}>
         <View style={s.topBar}>
           <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>

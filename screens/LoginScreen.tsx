@@ -332,8 +332,8 @@ export default function LoginScreen({ navigation, route }: any) {
 
           <SafeAreaView style={styles.headerContent}>
             <Animated.View style={{ opacity: headerFade }}>
-              <Text style={styles.brandMain}>SUPREME</Text>
-              <Text style={styles.brandSub}>ENERGIES</Text>
+              <Text style={styles.brandMain}>SOLVING</Text>
+              <Text style={styles.brandSub}>SOLAR</Text>
             </Animated.View>
           </SafeAreaView>
         </Animated.View>

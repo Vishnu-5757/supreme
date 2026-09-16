@@ -295,12 +295,13 @@ const DeleteConfirmModal = ({
 
 // ─── Payment Modal (FINAL – CENTERED + ZOOM EFFECT) ───────────────────
 const PaymentModal = ({
-    visible, onClose, onSave, initialData,
+    visible, onClose, onSave, initialData, maxAmount,
 }: {
     visible: boolean;
     onClose: () => void;
     onSave: (data: { amount_paid: string; paid_date: string; notes: string }) => void;
     initialData?: { amount_paid: string; paid_date: string; notes: string };
+    maxAmount?: number;
 }) => {
     const [amount, setAmount] = useState(initialData?.amount_paid || '');
     const [date, setDate] = useState<Date | null>(
@@ -310,6 +311,7 @@ const PaymentModal = ({
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [amountFocused, setAmountFocused] = useState(false);
     const [notesFocused, setNotesFocused] = useState(false);
+    const [error, setError] = useState('');
 
     const scaleAnim = useRef(new Animated.Value(1.08)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -319,6 +321,7 @@ const PaymentModal = ({
             setAmount(initialData?.amount_paid || '');
             setDate(initialData?.paid_date ? new Date(initialData.paid_date) : null);
             setNotes(initialData?.notes || '');
+            setError('');
 
             Animated.parallel([
                 Animated.timing(opacityAnim, {
@@ -345,8 +348,18 @@ const PaymentModal = ({
     };
 
     const handleSave = () => {
+        const trimmed = amount.trim();
+        const value = parseFloat(trimmed);
+        if (!trimmed || isNaN(value) || value <= 0) {
+            setError('Enter a valid amount greater than 0');
+            return;
+        }
+        if (maxAmount != null && value > maxAmount + 0.001) {
+            setError(`Amount exceeds remaining balance (${formatCurrency(maxAmount)})`);
+            return;
+        }
         onSave({
-            amount_paid: amount,
+            amount_paid: trimmed,
             paid_date: date ? date.toISOString().split('T')[0] : '',
             notes,
         });
@@ -400,11 +413,11 @@ const PaymentModal = ({
                             {/* Amount */}
                             <View style={pmStyles.field}>
                                 <Text style={pmStyles.label}>Amount (₹) *</Text>
-                                <View style={[pmStyles.inputRow, amountFocused && pmStyles.focus]}>
+                                <View style={[pmStyles.inputRow, amountFocused && pmStyles.focus, error && pmStyles.errorRow]}>
                                     <MaterialCommunityIcons name="currency-inr" size={18} color={THEME.muted} />
                                     <TextInput
                                         value={amount}
-                                        onChangeText={setAmount}
+                                        onChangeText={t => { setAmount(t); if (error) setError(''); }}
                                         placeholder="0.00"
                                         keyboardType="decimal-pad"
                                         onFocus={() => setAmountFocused(true)}
@@ -412,6 +425,10 @@ const PaymentModal = ({
                                         style={pmStyles.input}
                                     />
                                 </View>
+                                {error ? <Text style={pmStyles.errorText}>{error}</Text> : null}
+                                {maxAmount != null && !error && (
+                                    <Text style={pmStyles.hintText}>Remaining balance: {formatCurrency(maxAmount)}</Text>
+                                )}
                             </View>
 
                             {/* Date */}
@@ -532,6 +549,9 @@ const pmStyles = StyleSheet.create({
         borderColor: THEME.primary,
         backgroundColor: THEME.primarySoft,
     },
+    errorRow: { borderColor: THEME.danger, backgroundColor: THEME.dangerLt },
+    errorText: { fontSize: 11, color: THEME.danger, marginTop: 4, fontWeight: '600' },
+    hintText: { fontSize: 11, color: THEME.muted, marginTop: 4 },
     input: { flex: 1, marginLeft: 6 },
     textarea: {
         borderWidth: 1,
@@ -908,6 +928,10 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
                     onClose={() => { setPaymentModalVisible(false); setEditingPaymentIndex(null); }}
                     onSave={handleSavePayment}
                     initialData={editingPaymentIndex !== null ? payments[editingPaymentIndex] : undefined}
+                    maxAmount={Math.max(0, (parseFloat(totalAmount) || 0) - payments.reduce(
+                        (sum, p, i) => (i === editingPaymentIndex ? sum : sum + (parseFloat(p.amount_paid) || 0)),
+                        0,
+                    ))}
                 />
 
                 <DeleteConfirmModal

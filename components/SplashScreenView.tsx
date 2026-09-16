@@ -25,7 +25,7 @@ export default function SplashScreenView({ onFinish }: Props) {
     <View style={styles.container}>
       <StatusBar hidden />
       <Image
-        source={require('../assets/splash-fixed.png')}
+        source={require('../assets/splash_solving_solar.png')}
         style={styles.image}
         resizeMode="cover"
       />
@@ -36,7 +36,7 @@ export default function SplashScreenView({ onFinish }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1C23',
+    backgroundColor: '#FFFFFF',
   },
   image: {
     flex: 1,

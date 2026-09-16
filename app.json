@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Supreme",
-    "slug": "supremeenergies",
-    "scheme": "supremeenergies",
+    "name": "Solving Solar",
+    "slug": "solvingsolar",
+    "scheme": "solvingsolar",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/one.png",

@@ -259,7 +259,7 @@ const pdcStyles = StyleSheet.create({
 });
 
 // Detail Modal (simmilar to LeadDetailModal)
-const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCall, onTrack, onOpenLocation, canEdit, canDelete, canTrack }: any) => {
+const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCall, onTrack, onOpenLocation, onManagePayments, canEdit, canDelete, canTrack }: any) => {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const backdropOp = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
@@ -401,6 +401,11 @@ const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCal
       <Text style={[styles.quickBtnText, { color: THEME.success }]}>Track</Text>
     </TouchableOpacity>
   )}
+
+  <TouchableOpacity style={[styles.quickBtn, { backgroundColor: THEME.warningLight }]} onPress={() => onManagePayments(project)}>
+    <MaterialCommunityIcons name="cash-multiple" size={20} color={THEME.warning} />
+    <Text style={[styles.quickBtnText, { color: THEME.warning }]}>Payments</Text>
+  </TouchableOpacity>
 
   {!!project.location_link && (
     <TouchableOpacity style={[styles.quickBtn, { backgroundColor: THEME.primaryLight }]} onPress={() => onOpenLocation?.(project.location_link)}>
@@ -872,6 +877,10 @@ export default function ProjectsScreen({ navigation }: any) {
     project,
   });
 };
+  const handleManagePayments = (project: any) => {
+    setShowDetailModal(false);
+    navigation.navigate('ManagePayments', { project, canEdit });
+  };
 
   const cardPress = (project: any) => {
     openDetail(project);
@@ -1050,6 +1059,7 @@ export default function ProjectsScreen({ navigation }: any) {
   onDelete={handleDeleteProject}
   onCall={handleCall}
   onTrack={handleTrackProject}
+  onManagePayments={handleManagePayments}
   onOpenLocation={handleOpenLocation}
   canEdit={canEdit}
   canDelete={canDelete}

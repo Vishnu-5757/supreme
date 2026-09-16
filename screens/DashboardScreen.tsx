@@ -1686,7 +1686,7 @@ export default function DashboardScreen({
                   styles.headerBrand
                 }
               >
-                SUPREME ENERGIES
+                SOLVING SOLAR
               </Text>
 
               <Text

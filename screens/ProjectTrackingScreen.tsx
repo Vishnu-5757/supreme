@@ -7,6 +7,7 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  RefreshControl,
   TextInput,
   ActivityIndicator,
   Animated,
@@ -43,110 +44,84 @@ const THEME = {
 };
 
 interface StepDef {
-  key: string;
+  id: number;
+  slug: string | null;
   label: string;
   description: string;
   icon: string;
   color: string;
-  residentialOnly?: boolean;   // ← true = only show for Residential
   dateField: string;
   remarksField: string;
   doneField: string;
+  skippedField: string;
+  editable: boolean;
 }
 
-const STEPS: StepDef[] = [
-  {
-    key: 'subsidy',
-    label: 'Subsidy Registration',
-    description: 'Government subsidy registration for residential solar projects',
-    icon: 'file-certificate-outline',
-    color: '#7C3AED',
-    residentialOnly: true,      // ← ONLY for Residential projects
-    dateField: 'subsidy_registration_date',
-    remarksField: 'subsidy_registration_remarks',
-    doneField: 'subsidy_registration_done',
-  },
-  {
-    key: 'loan',
-    label: 'Loan Paperwork',
-    description: 'Loan documentation and financial paperwork processing',
-    icon: 'bank-outline',
-    color: '#D97706',
-    dateField: 'loan_paperwork_date',
-    remarksField: 'loan_paperwork_remarks',
-    doneField: 'loan_paperwork_done',
-  },
-  {
-    key: 'kseb_feasibility',
-    label: 'KSEB Feasibility',
-    description: 'Grid connection feasibility check by KSEB',
-    icon: 'flash-outline',
-    color: '#2563EB',
-    dateField: 'kseb_feasibility_date',
-    remarksField: 'kseb_feasibility_remarks',
-    doneField: 'kseb_feasibility_done',
-  },
-  {
-    key: 'material_delivery',
-    label: 'Material Delivery',
-    description: 'Solar panels and equipment delivery to site',
-    icon: 'truck-delivery-outline',
-    color: '#0891B2',
-    dateField: 'material_delivery_date',
-    remarksField: 'material_delivery_remarks',
-    doneField: 'material_delivery_done',
-  },
-  {
-    key: 'work_started',
-    label: 'Work Started',
-    description: 'Installation work has commenced at site',
-    icon: 'hammer-wrench',
-    color: '#EA580C',
-    dateField: 'work_started_date',
-    remarksField: 'work_started_remarks',
-    doneField: 'work_started_done',
-  },
-  {
-    key: 'work_completed',
-    label: 'Work Completed',
-    description: 'Physical structure and panel installation finished',
-    icon: 'check-decagram-outline',
-    color: '#16A34A',
-    dateField: 'work_completed_date',
-    remarksField: 'work_completed_remarks',
-    doneField: 'work_completed_done',
-  },
-  {
-    key: 'kseb_completion_report',
-    label: 'KSEB Report',
-    description: 'Completion report submitted to KSEB',
-    icon: 'file-chart-outline',
-    color: '#2563EB',
-    dateField: 'kseb_completion_report_date',
-    remarksField: 'kseb_completion_report_remarks',
-    doneField: 'kseb_completion_report_done',
-  },
-  {
-    key: 'completion_approved',
-    label: 'Approved',
-    description: 'Project completion officially approved',
-    icon: 'shield-check-outline',
-    color: '#7C3AED',
-    dateField: 'completion_approved_date',
-    remarksField: 'completion_approved_remarks',
-    doneField: 'completion_approved_done',
-  },
-  {
-    key: 'plant_commissioned',
-    label: 'Commissioned',
-    description: 'Solar plant is live and generating power',
-    icon: 'solar-power',
-    color: '#16A34A',
-    dateField: 'plant_commissioned_date',
-    remarksField: 'plant_commissioned_remarks',
-    doneField: 'plant_commissioned_done',
-  },
-];
+// Server-returned shape of one entry in the `steps` array from
+// /project/<id>/tracking-api/ — covers every effective step for this
+// project's branch (built-in AND custom), already filtered by
+// category/payment/branch-hide and already in the correct order. This
+// replaces the old hardcoded 9-step list, so a custom step added from the
+// web Milestone Settings screen shows up here automatically.
+interface ServerStep {
+  id: number;
+  slug: string | null;
+  name: string;
+  subtitle: string;
+  icon_class: string;
+  doc_upload_enabled: boolean;
+  date: string | null;
+  remarks: string;
+  doc_url: string | null;
+  done: boolean;
+  skipped: boolean;
+  editable: boolean;
+}
+
+// Nicer icon/color/description for the 9 known built-in steps than the
+// server's generic icon_class (a web Font Awesome class, not usable here).
+// A custom step (slug null, or any future slug not in this map) falls back
+// to DEFAULT_PRESENTATION and uses the server's own name/subtitle as-is.
+const BUILTIN_PRESENTATION: Record<string, { icon: string; color: string; description: string; label: string }> = {
+  subsidy: { icon: 'file-certificate-outline', color: '#7C3AED', label: 'Subsidy Registration', description: 'Government subsidy registration for residential solar projects' },
+  loan: { icon: 'bank-outline', color: '#D97706', label: 'Loan Paperwork', description: 'Loan documentation and financial paperwork processing' },
+  kseb_feasibility: { icon: 'flash-outline', color: '#2563EB', label: 'KSEB Feasibility', description: 'Grid connection feasibility check by KSEB' },
+  material_delivery: { icon: 'truck-delivery-outline', color: '#0891B2', label: 'Material Delivery', description: 'Solar panels and equipment delivery to site' },
+  work_started: { icon: 'hammer-wrench', color: '#EA580C', label: 'Work Started', description: 'Installation work has commenced at site' },
+  work_completed: { icon: 'check-decagram-outline', color: '#16A34A', label: 'Work Completed', description: 'Physical structure and panel installation finished' },
+  kseb_completion_report: { icon: 'file-chart-outline', color: '#2563EB', label: 'KSEB Report', description: 'Completion report submitted to KSEB' },
+  completion_approved: { icon: 'shield-check-outline', color: '#7C3AED', label: 'Approved', description: 'Project completion officially approved' },
+  plant_commissioned: { icon: 'solar-power', color: '#16A34A', label: 'Commissioned', description: 'Solar plant is live and generating power' },
+};
+const DEFAULT_PRESENTATION = { icon: 'clipboard-check-outline', color: '#4B5563' };
+
+const buildStepDef = (s: ServerStep): StepDef => {
+  const preset = s.slug ? BUILTIN_PRESENTATION[s.slug] : undefined;
+  return {
+    id: s.id,
+    slug: s.slug,
+    label: preset?.label || s.name,
+    description: preset?.description || s.subtitle || '',
+    icon: preset?.icon || DEFAULT_PRESENTATION.icon,
+    color: preset?.color || DEFAULT_PRESENTATION.color,
+    dateField: `entry_${s.id}_date`,
+    remarksField: `entry_${s.id}_remarks`,
+    doneField: `entry_${s.id}_done`,
+    skippedField: `entry_${s.id}_skipped`,
+    editable: s.editable,
+  };
+};
+
+const buildTrackingDataFromSteps = (stepsArr: ServerStep[]) => {
+  const data: Record<string, any> = {};
+  stepsArr.forEach(s => {
+    data[`entry_${s.id}_date`] = s.date || '';
+    data[`entry_${s.id}_remarks`] = s.remarks || '';
+    data[`entry_${s.id}_done`] = !!s.done;
+    data[`entry_${s.id}_skipped`] = !!s.skipped;
+  });
+  return data;
+};
 
 const formatDateDisplay = (dateStr: string) => {
   if (!dateStr) return '';
@@ -242,10 +217,12 @@ const fmStyles = StyleSheet.create({
   btnText:  { fontSize: 15, fontWeight: '700' },
 });
 
-// ─── StepEditModal (unchanged) ─────────────────────────────────────
-const StepEditModal = ({ visible, step, trackingData, onClose, onSave, saving }: any) => {
+// ─── StepEditModal ───────────────────────────────────────────────────
+const StepEditModal = ({ visible, step, trackingData, onClose, onSave, onSkip, saving }: any) => {
   const dateValue = trackingData[step?.dateField] || '';
   const remarksValue = trackingData[step?.remarksField] || '';
+  const isSkipped = !!trackingData[step?.skippedField];
+  const isDone = !!trackingData[step?.doneField];
   const [date, setDate] = useState(dateValue);
   const [remarks, setRemarks] = useState(remarksValue);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -266,9 +243,13 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, saving }:
   };
 
   const handleSave = () => {
-    const hasContent = !!(date?.trim() || remarks?.trim());
-    onSave({ date, remarks, autoTick: hasContent });
+    // Marking a milestone Done requires a date — matches the server's own
+    // rule. Remarks alone no longer silently ticks it off; use Skip instead
+    // when there's nothing to date yet.
+    onSave({ date, remarks, autoTick: !!date?.trim() });
   };
+
+  const handleSkip = () => onSkip(remarks);
 
   if (!step) return null;
 
@@ -287,6 +268,12 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, saving }:
                 <Text style={styles.modalDesc} numberOfLines={1}>{step.description}</Text>
               </View>
             </View>
+            {isSkipped && (
+              <View style={styles.skippedBanner}>
+                <MaterialCommunityIcons name="debug-step-over" size={13} color={THEME.warning} />
+                <Text style={styles.skippedBannerText}>This milestone is currently marked as Skipped.</Text>
+              </View>
+            )}
             <View style={styles.modalFormBody}>
               <View style={styles.modalField}>
                 <Text style={styles.fieldLabel}>Date Cleared</Text>
@@ -319,6 +306,12 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, saving }:
                 />
               </View>
             </View>
+            {!isDone && (
+              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} disabled={saving} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="debug-step-over" size={15} color={THEME.warning} />
+                <Text style={styles.skipBtnText}>Skip this milestone (requires a reason above)</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.modalActionsRow}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
                 <Text style={styles.cancelBtnText}>Dismiss</Text>
@@ -334,22 +327,27 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, saving }:
   );
 };
 
-// ─── TimelineStepCard (unchanged) ──────────────────────────────────
+// ─── TimelineStepCard ────────────────────────────────────────────────
 const TimelineStepCard = ({ step, trackingData, onToggleDone, onPress }: any) => {
   const isDone = !!trackingData[step.doneField];
+  const isSkipped = !isDone && !!trackingData[step.skippedField];
   const dateValue = trackingData[step.dateField];
   const remarks = trackingData[step.remarksField] || '';
+
+  const nodeStyle = isDone ? styles.timelineNodeDone : isSkipped ? styles.timelineNodeSkipped : styles.timelineNodePending;
+  const lineStyle = isDone ? styles.timelineLineDone : isSkipped ? styles.timelineLineSkipped : null;
+  const nodeIcon = isDone ? 'check' : isSkipped ? 'debug-step-over' : step.icon;
 
   return (
     <View style={styles.timelineRowWrap}>
       <View style={styles.timelineRail}>
-        <View style={[styles.timelineLineTop, isDone && styles.timelineLineDone]} />
-        <View style={[styles.timelineNode, isDone ? styles.timelineNodeDone : styles.timelineNodePending]}>
-          <MaterialCommunityIcons name={isDone ? 'check' : step.icon} size={11} color={isDone ? '#FFF' : THEME.textSecondary} />
+        <View style={[styles.timelineLineTop, lineStyle]} />
+        <View style={[styles.timelineNode, nodeStyle]}>
+          <MaterialCommunityIcons name={nodeIcon} size={11} color={isDone || isSkipped ? '#FFF' : THEME.textSecondary} />
         </View>
-        <View style={[styles.timelineLineBottom, isDone && styles.timelineLineDone]} />
+        <View style={[styles.timelineLineBottom, lineStyle]} />
       </View>
-      <TouchableOpacity activeOpacity={0.9} onPress={() => onPress(step)} style={[styles.timelineCard, isDone && styles.timelineCardDone]}>
+      <TouchableOpacity activeOpacity={0.9} onPress={() => onPress(step)} style={[styles.timelineCard, isDone && styles.timelineCardDone, isSkipped && styles.timelineCardSkipped]}>
         <View style={styles.timelineCardTop}>
           <View style={styles.timelineTitleBlock}>
             <Text style={[styles.timelineTitle, isDone && styles.timelineTitleDone]} numberOfLines={1}>{step.label}</Text>
@@ -361,8 +359,17 @@ const TimelineStepCard = ({ step, trackingData, onToggleDone, onPress }: any) =>
         </View>
         <View style={styles.timelineMetaRow}>
           <View style={styles.timelineMetaLeft}>
-            <MaterialCommunityIcons name={dateValue ? 'calendar-check-outline' : 'calendar-outline'} size={11} color={dateValue ? THEME.textSecondary : THEME.muted} />
-            <Text style={[styles.timelineMetaText, dateValue ? styles.timelineMetaTextDark : styles.timelineMetaTextMuted]}>{dateValue ? formatDateDisplay(dateValue) : 'No date'}</Text>
+            {isSkipped ? (
+              <>
+                <MaterialCommunityIcons name="debug-step-over" size={11} color={THEME.warning} />
+                <Text style={[styles.timelineMetaText, { color: THEME.warning }]}>Skipped</Text>
+              </>
+            ) : (
+              <>
+                <MaterialCommunityIcons name={dateValue ? 'calendar-check-outline' : 'calendar-outline'} size={11} color={dateValue ? THEME.textSecondary : THEME.muted} />
+                <Text style={[styles.timelineMetaText, dateValue ? styles.timelineMetaTextDark : styles.timelineMetaTextMuted]}>{dateValue ? formatDateDisplay(dateValue) : 'No date'}</Text>
+              </>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -373,7 +380,7 @@ const TimelineStepCard = ({ step, trackingData, onToggleDone, onPress }: any) =>
 // ─── TimelineSection (unchanged) ───────────────────────────────────
 const TimelineSection = ({ title, steps, trackingData, onToggleDone, onPress }: any) => {
   if (!steps.length) return null;
-  const doneCount = steps.filter((s: StepDef) => !!trackingData[s.doneField]).length;
+  const doneCount = steps.filter((s: StepDef) => !!trackingData[s.doneField] || !!trackingData[s.skippedField]).length;
   return (
     <View style={styles.timelineSectionCardShadow}>
       <View style={styles.timelineSectionCard}>
@@ -383,7 +390,7 @@ const TimelineSection = ({ title, steps, trackingData, onToggleDone, onPress }: 
         </View>
         <View style={styles.timelineSectionList}>
           {steps.map((step: StepDef) => (
-            <TimelineStepCard key={step.key} step={step} trackingData={trackingData} onToggleDone={onToggleDone} onPress={onPress} />
+            <TimelineStepCard key={step.id} step={step} trackingData={trackingData} onToggleDone={onToggleDone} onPress={onPress} />
           ))}
         </View>
       </View>
@@ -413,6 +420,7 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
 
   const [trackingData, setTrackingData] = useState<Record<string, any>>({});
   const [category, setCategory] = useState<'RES' | 'COM'>('RES');
+  const [visibleSteps, setVisibleSteps] = useState<StepDef[]>([]);
   const [localChanges, setLocalChanges] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -445,19 +453,23 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
     });
   }, [navigation, route]);
 
-  const fetchTracking = useCallback(async () => {
-    setLoading(true);
+  const fetchTracking = useCallback(async (silent = false) => {
+    // `silent` skips the full-screen loading state — used by pull-to-refresh,
+    // which shows its own inline spinner instead of replacing the whole screen.
+    if (!silent) setLoading(true);
     try {
       const res = await apiRequest(`${API_BASE_URL}/project/${project.id}/tracking-api/`);
       if (!res.ok) throw new Error('Failed to load');
       const json = await res.json();
-      setTrackingData(json.fields || {});
+      const stepsArr: ServerStep[] = json.steps || [];
+      setVisibleSteps(stepsArr.map(buildStepDef));
+      setTrackingData(buildTrackingDataFromSteps(stepsArr));
       setCategory(json.category || 'RES');
       setLocalChanges({});
     } catch {
       showFeedback('error', 'Error', 'Could not load tracking data', false);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [apiRequest, project.id, showFeedback]);
 
@@ -467,49 +479,66 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
     fetchTracking();
   }, [fetchTracking]);
 
-  // 🔥 CORRECTED FILTERING LOGIC:
-  // Residential → show subsidy (residentialOnly steps)
-  // Commercial → hide subsidy (exclude residentialOnly steps)
-  const visibleSteps = useMemo(() => {
-    let steps = STEPS;
-    if (category === 'COM') {
-      // For Commercial: exclude steps marked residentialOnly (i.e., subsidy)
-      steps = steps.filter(s => !s.residentialOnly);
-    }
-    // For Residential: keep all steps (including subsidy)
-    // Additionally, hide the loan step if payment_type is 'cash'
-    if (project.payment_type === 'cash') {
-      steps = steps.filter(s => s.key !== 'loan');
-    }
-    return steps;
-  }, [category, project.payment_type]);
+  const [refreshing, setRefreshing] = useState(false);
+  const onPullToRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchTracking(true);
+    setRefreshing(false);
+  }, [fetchTracking]);
+
+  // Step inclusion, order, and category/payment/branch-hide filtering are
+  // all resolved server-side (project/milestones.py's get_effective_steps) —
+  // visibleSteps is just what the server sent, already correct.
 
   const effectiveData = useMemo(() => ({ ...trackingData, ...localChanges }), [trackingData, localChanges]);
   const hasLocalChanges = Object.keys(localChanges).length > 0;
 
+  // A step counts as "out of the way" (done OR skipped) for order-checking
+  // purposes — mirrors the server's rule, which applies to everyone with no
+  // exceptions. Checked client-side for instant feedback; the server always
+  // re-checks regardless, so this is a UX nicety, not the source of truth.
+  const isStepResolved = useCallback(
+    (step: StepDef) => !!effectiveData[step.doneField] || !!effectiveData[step.skippedField],
+    [effectiveData],
+  );
+
+  const getBlockingStep = useCallback(
+    (step: StepDef): StepDef | null => {
+      const idx = visibleSteps.findIndex(s => s.id === step.id);
+      if (idx <= 0) return null;
+      const prev = visibleSteps[idx - 1];
+      return isStepResolved(prev) ? null : prev;
+    },
+    [visibleSteps, isStepResolved],
+  );
+
   const handleSaveAll = async () => {
-    const dataToSend: Record<string, any> = {};
-    visibleSteps.forEach(step => {
-      dataToSend[step.dateField] = effectiveData[step.dateField] || '';
-      dataToSend[step.remarksField] = effectiveData[step.remarksField] || '';
-      dataToSend[step.doneField] = effectiveData[step.doneField] ? '1' : '0';
-    });
+    // Only the fields the user actually touched — sending every visible
+    // step's fields on every sync (the old behavior) would include an empty
+    // date/done pair for steps nobody meant to touch, which the backend now
+    // correctly rejects (a save must have a date, Skip is the way around
+    // that). Queued local edits already carry only their own changed keys.
+    if (!hasLocalChanges) return;
 
     setSaving(true);
     try {
       const res = await apiRequest(`${API_BASE_URL}/project/${project.id}/tracking-api/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSend),
+        body: JSON.stringify(localChanges),
       });
+      const json = await res.json().catch(() => ({} as any));
       if (res.ok) {
-        const json = await res.json();
-        setTrackingData(json.fields || {});
+        const stepsArr: ServerStep[] = json.steps || [];
+        if (stepsArr.length) {
+          setVisibleSteps(stepsArr.map(buildStepDef));
+          setTrackingData(buildTrackingDataFromSteps(stepsArr));
+        }
         setCategory(json.category || category);
         setLocalChanges({});
         showFeedback('success', 'Saved Successfully', 'All workflow updates pushed online', true);
       } else {
-        showFeedback('error', 'Error', 'Unable to store updates', false);
+        showFeedback('error', 'Error', json.error || 'Unable to store updates', false);
       }
     } catch {
       showFeedback('error', 'Connection Error', 'Connection error encountered', false);
@@ -521,23 +550,64 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
   const toggleDone = (step: StepDef) => {
     const current = !!effectiveData[step.doneField];
     const newDone = !current;
+
+    if (newDone) {
+      const blocker = getBlockingStep(step);
+      if (blocker) {
+        showFeedback('error', 'Complete Previous Step', `Complete or skip '${blocker.label}' before completing '${step.label}'.`, false);
+        return;
+      }
+    }
+
     const changes: Record<string, any> = { [step.doneField]: newDone };
-    if (newDone && !effectiveData[step.dateField]) changes[step.dateField] = todayISO();
+    if (newDone) {
+      if (!effectiveData[step.dateField]) changes[step.dateField] = todayISO();
+      changes[step.skippedField] = false;
+    }
     setLocalChanges(prev => ({ ...prev, ...changes }));
   };
 
   const handleModalSave = useCallback(
     ({ date, remarks, autoTick }: { date: string; remarks: string; autoTick: boolean }) => {
       if (!editStep) return;
+
+      if (autoTick) {
+        const blocker = getBlockingStep(editStep);
+        if (blocker) {
+          showFeedback('error', 'Complete Previous Step', `Complete or skip '${blocker.label}' before completing '${editStep.label}'.`, false);
+          return;
+        }
+      }
+
       const changes: Record<string, any> = {
         [editStep.dateField]: date,
         [editStep.remarksField]: remarks,
         [editStep.doneField]: autoTick ? true : effectiveData[editStep.doneField] || false,
       };
+      if (autoTick) changes[editStep.skippedField] = false;
       setLocalChanges(prev => ({ ...prev, ...changes }));
       setEditStep(null);
     },
-    [editStep, effectiveData],
+    [editStep, effectiveData, getBlockingStep, showFeedback],
+  );
+
+  const handleModalSkip = useCallback(
+    (remarks: string) => {
+      if (!editStep) return;
+      if (!remarks.trim()) {
+        showFeedback('error', 'Reason Required', `Add a reason in Remarks before skipping '${editStep.label}'.`, false);
+        return;
+      }
+      const changes: Record<string, any> = {
+        [editStep.skippedField]: true,
+        [editStep.doneField]: false,
+        [editStep.dateField]: '',
+        [editStep.remarksField]: remarks,
+      };
+      setLocalChanges(prev => ({ ...prev, ...changes }));
+      setEditStep(null);
+    },
+    [editStep, showFeedback],
   );
 
   const avatarLetter = project.customer_name?.[0]?.toUpperCase() || 'P';
@@ -623,6 +693,14 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
             style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onPullToRefresh}
+                colors={[THEME.primary]}
+                tintColor={THEME.primary}
+              />
+            }
           >
             <SectionLabel icon="timeline-outline" title="Project Milestones" />
             <View style={styles.timelineSectionWrap}>
@@ -671,6 +749,7 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
         trackingData={effectiveData}
         onClose={() => setEditStep(null)}
         onSave={handleModalSave}
+        onSkip={handleModalSkip}
         saving={false}
       />
     </View>
@@ -777,6 +856,8 @@ const styles = StyleSheet.create({
   },
   timelineNodePending: { borderColor: '#D1D5DB' },
   timelineNodeDone: { backgroundColor: THEME.success, borderColor: THEME.success },
+  timelineNodeSkipped: { backgroundColor: THEME.warning, borderColor: THEME.warning },
+  timelineLineSkipped: { backgroundColor: THEME.warningLight },
   timelineCard: {
     flex: 1, backgroundColor: '#FFF', borderRadius: 12,
     borderWidth: 1, borderColor: '#E5E7EB', padding: 10,
@@ -784,6 +865,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 }, elevation: 1, overflow: 'hidden',
   },
   timelineCardDone: { borderColor: THEME.successLight, backgroundColor: '#F9FBF9' },
+  timelineCardSkipped: { borderColor: THEME.warningLight, backgroundColor: '#FFFDF7' },
   timelineCardTop: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
   },
@@ -850,7 +932,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 13,
     color: THEME.text, backgroundColor: '#F9FAFB', minHeight: 64,
   },
-  modalActionsRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  skippedBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: THEME.warningLight, borderRadius: 8,
+    paddingVertical: 7, paddingHorizontal: 10, marginBottom: 12,
+  },
+  skippedBannerText: { fontSize: 11, fontWeight: '600', color: '#92400E', flex: 1 },
+  skipBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1.5, borderColor: THEME.warning, borderRadius: 8,
+    paddingVertical: 10, marginTop: 14,
+  },
+  skipBtnText: { fontSize: 12, fontWeight: '700', color: THEME.warning, textAlign: 'center' },
+  modalActionsRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   cancelBtn: {
     flex: 1, paddingVertical: 12, borderRadius: 8,
     borderWidth: 1, borderColor: THEME.border, alignItems: 'center',

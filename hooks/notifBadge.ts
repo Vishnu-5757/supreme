@@ -33,6 +33,12 @@ export function getBadgeCount(): number {
 
 export function subscribeBadge(fn: (n: number) => void): () => void {
   _listeners.push(fn);
+  // Sync the subscriber to whatever the count already is right now. Without
+  // this, a subscriber that mounts just after refreshBadgeFromServer()
+  // already resolved (e.g. right after login, where the fetch races the
+  // screen mount) would miss that update entirely and stay stuck at its
+  // stale initial value until some other refresh happens to fire later.
+  fn(_count);
   return () => {
     const idx = _listeners.indexOf(fn);
     if (idx !== -1) _listeners.splice(idx, 1);

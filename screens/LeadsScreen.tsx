@@ -25,6 +25,7 @@ import { useAuthApi } from '../hooks/useAuthApi';
 import { API_BASE_URL } from '../config';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearBadge, getBadgeCount, subscribeBadge, refreshBadgeFromServer } from '../hooks/notifBadge';
+import { userCache } from '../hooks/userCache';
 import { AccountMenu } from '../components/AccountMenu';
 import { SkeletonRow } from '../components/Skeleton';
 
@@ -657,12 +658,12 @@ export default function LeadsScreen({ navigation, route }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const [qualityFilter, setQualityFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [assignedToMeFilter, setAssignedToMeFilter] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState({ visible: false, type: 'success' as 'success' | 'error', title: '', message: '' });
-  const [showQualityDropdown, setShowQualityDropdown] = useState(false);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -677,6 +678,7 @@ export default function LeadsScreen({ navigation, route }: any) {
 
   const [tempQualitySelection, setTempQualitySelection] = useState<string[]>([]);
   const [tempStatusSelection, setTempStatusSelection] = useState<string[]>([]);
+  const [tempAssignedToMe, setTempAssignedToMe] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const isFetching = useRef(false);
@@ -724,7 +726,7 @@ export default function LeadsScreen({ navigation, route }: any) {
   }, []);
 
   const fetchLeads = useCallback(
-    async (page: number, shouldAppend: boolean, search: string, quality: string[], status: string[]) => {
+    async (page: number, shouldAppend: boolean, search: string, quality: string[], status: string[], assignedToMe: boolean = false) => {
       if (isFetching.current) return;
       isFetching.current = true;
 
@@ -739,6 +741,7 @@ export default function LeadsScreen({ navigation, route }: any) {
         if (search) params.append('q', search);
         if (quality.length > 0) params.append('quality', quality.join(','));
         if (status.length > 0) params.append('status', status.join(','));
+        if (assignedToMe && userCache.current?.id) params.append('assigned_to', String(userCache.current.id));
         params.append('page', page.toString());
         params.append('page_size', '20');
 
@@ -773,17 +776,17 @@ export default function LeadsScreen({ navigation, route }: any) {
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
-      fetchLeads(1, false, searchQuery, qualityFilter, statusFilter);
+      fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
     }, 400);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchQuery, qualityFilter, statusFilter]);
+  }, [searchQuery, qualityFilter, statusFilter, assignedToMeFilter]);
 
   useFocusEffect(
     useCallback(() => {
       if (!mountFetchDone.current) {
         mountFetchDone.current = true;
       } else {
-        fetchLeads(1, false, searchQuery, qualityFilter, statusFilter);
+        fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
       }
 
       refreshBadgeFromServer();
@@ -801,7 +804,7 @@ export default function LeadsScreen({ navigation, route }: any) {
             if (lead) {
               navigation.navigate('AddEditLead', {
                 lead,
-                onSuccess: () => fetchLeads(1, false, searchQuery, qualityFilter, statusFilter),
+                onSuccess: () => fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter),
               });
             }
           })
@@ -812,14 +815,14 @@ export default function LeadsScreen({ navigation, route }: any) {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchLeads(1, false, searchQuery, qualityFilter, statusFilter);
-  }, [fetchLeads, searchQuery, qualityFilter, statusFilter]);
+    fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
+  }, [fetchLeads, searchQuery, qualityFilter, statusFilter, assignedToMeFilter]);
 
   const loadMore = useCallback(() => {
     if (hasNextPage && !loadingMore && !loading && !refreshing) {
-      fetchLeads(currentPage + 1, true, searchQuery, qualityFilter, statusFilter);
+      fetchLeads(currentPage + 1, true, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
     }
-  }, [hasNextPage, loadingMore, loading, refreshing, currentPage, fetchLeads, searchQuery, qualityFilter, statusFilter]);
+  }, [hasNextPage, loadingMore, loading, refreshing, currentPage, fetchLeads, searchQuery, qualityFilter, statusFilter, assignedToMeFilter]);
 
   const handleCall = async (phone: string) => {
     if (!phone) return;
@@ -842,7 +845,7 @@ export default function LeadsScreen({ navigation, route }: any) {
     setShowDetailModal(false);
     navigation.navigate('AddEditLead', {
       lead: lead,
-      onSuccess: () => fetchLeads(1, false, searchQuery, qualityFilter, statusFilter),
+      onSuccess: () => fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter),
     });
   };
 
@@ -884,7 +887,7 @@ export default function LeadsScreen({ navigation, route }: any) {
 
   const navigateToAddLead = () => {
     navigation.navigate('AddEditLead', {
-      onSuccess: () => fetchLeads(1, false, searchQuery, qualityFilter, statusFilter),
+      onSuccess: () => fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter),
     });
   };
 
@@ -899,7 +902,7 @@ export default function LeadsScreen({ navigation, route }: any) {
       lead: lead,
       onSuccess: () => {
         // After project is created, refresh the leads list to pick up is_converted status
-        fetchLeads(1, false, searchQuery, qualityFilter, statusFilter);
+        fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
         showToast('Project created from lead!', 'success');
       },
     });
@@ -907,7 +910,7 @@ export default function LeadsScreen({ navigation, route }: any) {
 
   const hotLeads = leads.filter(l => l.quality_fk?.name?.toLowerCase().includes('hot')).length;
   const assignedLeads = leads.filter(l => l.assigned_to).length;
-  const getFilterCount = () => qualityFilter.length + statusFilter.length;
+  const getFilterCount = () => qualityFilter.length + statusFilter.length + (assignedToMeFilter ? 1 : 0);
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -920,29 +923,28 @@ export default function LeadsScreen({ navigation, route }: any) {
     );
   };
 
-  const openQualityModal = () => {
+  const openFiltersSheet = () => {
     setTempQualitySelection([...qualityFilter]);
-    setShowQualityDropdown(true);
-  };
-
-  const openStatusModal = () => {
     setTempStatusSelection([...statusFilter]);
-    setShowStatusDropdown(true);
+    setTempAssignedToMe(assignedToMeFilter);
+    setShowFiltersSheet(true);
   };
 
-  const applyQualityFilters = () => {
+  const applyAllFilters = () => {
     setQualityFilter(tempQualitySelection);
-    setShowQualityDropdown(false);
-  };
-
-  const applyStatusFilters = () => {
     setStatusFilter(tempStatusSelection);
-    setShowStatusDropdown(false);
+    setAssignedToMeFilter(tempAssignedToMe);
+    setShowFiltersSheet(false);
   };
 
   const clearAllFilters = () => {
     setQualityFilter([]);
     setStatusFilter([]);
+    setAssignedToMeFilter(false);
+    setTempQualitySelection([]);
+    setTempStatusSelection([]);
+    setTempAssignedToMe(false);
+    setShowFiltersSheet(false);
   };
 
   const toggleQualityOption = (id: string) => {
@@ -957,7 +959,7 @@ export default function LeadsScreen({ navigation, route }: any) {
     );
   };
 
-  if (loading && !refreshing && leads.length === 0 && !searchQuery && qualityFilter.length === 0 && statusFilter.length === 0) {
+  if (loading && !refreshing && leads.length === 0 && !searchQuery && qualityFilter.length === 0 && statusFilter.length === 0 && !assignedToMeFilter) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.bg }}>
         <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
@@ -1033,30 +1035,24 @@ export default function LeadsScreen({ navigation, route }: any) {
 
           <View style={styles.bodyWrap}>
           <View style={styles.filterStrip}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-              <TouchableOpacity style={[styles.filterPill, qualityFilter.length > 0 && styles.filterPillActive]} onPress={openQualityModal}>
-                <MaterialCommunityIcons name="star-four-points-outline" size={13} color={qualityFilter.length > 0 ? '#FFF' : THEME.primary} />
-                <Text style={[styles.filterPillText, qualityFilter.length > 0 && styles.filterPillTextActive]}>
-                  Quality {qualityFilter.length > 0 ? `(${qualityFilter.length})` : ''}
-                </Text>
-                <MaterialCommunityIcons name="chevron-down" size={13} color={qualityFilter.length > 0 ? '#FFF' : THEME.primary} />
-              </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filtersButton, getFilterCount() > 0 && styles.filterPillActive]}
+              onPress={openFiltersSheet}
+            >
+              <MaterialCommunityIcons name="tune-variant" size={15} color={getFilterCount() > 0 ? '#FFF' : THEME.primary} />
+              <Text style={[styles.filtersButtonText, getFilterCount() > 0 && styles.filterPillTextActive]}>
+                Filters {getFilterCount() > 0 ? `(${getFilterCount()})` : ''}
+              </Text>
+              <MaterialCommunityIcons name="chevron-down" size={15} color={getFilterCount() > 0 ? '#FFF' : THEME.primary} />
+            </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.filterPill, statusFilter.length > 0 && styles.filterPillActive]} onPress={openStatusModal}>
-                <MaterialCommunityIcons name="progress-check" size={13} color={statusFilter.length > 0 ? '#FFF' : THEME.primary} />
-                <Text style={[styles.filterPillText, statusFilter.length > 0 && styles.filterPillTextActive]}>
-                  Status {statusFilter.length > 0 ? `(${statusFilter.length})` : ''}
-                </Text>
-                <MaterialCommunityIcons name="chevron-down" size={13} color={statusFilter.length > 0 ? '#FFF' : THEME.primary} />
+            {getFilterCount() > 0 && (
+              <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearAllFilters}>
+                <MaterialCommunityIcons name="filter-off-outline" size={13} color={THEME.danger} />
+                <Text style={styles.clearFiltersText}>Clear</Text>
               </TouchableOpacity>
+            )}
 
-              {getFilterCount() > 0 && (
-                <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearAllFilters}>
-                  <MaterialCommunityIcons name="filter-off-outline" size={13} color={THEME.danger} />
-                  <Text style={styles.clearFiltersText}>Clear</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
             <Text style={styles.resultCount}>{leads.length} shown</Text>
           </View>
 
@@ -1122,86 +1118,75 @@ export default function LeadsScreen({ navigation, route }: any) {
           />
 
           {/* Quality filter modal */}
-          <Modal visible={showQualityDropdown} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowQualityDropdown(false)}>
+          <Modal visible={showFiltersSheet} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowFiltersSheet(false)}>
             <View style={styles.centerModalRoot}>
-              <Pressable style={styles.modalBackdropFull} onPress={() => setShowQualityDropdown(false)} />
+              <Pressable style={styles.modalBackdropFull} onPress={() => setShowFiltersSheet(false)} />
               <View style={styles.multiSelectCard}>
                 <View style={styles.multiSelectHeader}>
-                  <Text style={styles.multiSelectTitle}>Filter by Quality</Text>
-                  <TouchableOpacity onPress={() => setShowQualityDropdown(false)}>
+                  <Text style={styles.multiSelectTitle}>Filters</Text>
+                  <TouchableOpacity onPress={() => setShowFiltersSheet(false)}>
                     <MaterialCommunityIcons name="close" size={20} color={THEME.muted} />
                   </TouchableOpacity>
                 </View>
-                {loadingQualityOptions ? (
-                  <View style={styles.dropdownLoading}>
-                    <ActivityIndicator size="small" color={THEME.primary} />
-                    <Text style={styles.dropdownLoadingText}>Loading...</Text>
-                  </View>
-                ) : (
-                  <ScrollView style={{ maxHeight: height * 0.5 }}>
-                    {qualityOptions.length === 0 ? (
-                      <Text style={styles.dropdownEmpty}>No quality options available</Text>
-                    ) : (
-                      qualityOptions.map(option => (
-                        <TouchableOpacity key={String(option.id)} style={styles.checkboxItem} onPress={() => toggleQualityOption(String(option.id))}>
-                          <View style={[styles.checkbox, tempQualitySelection.includes(String(option.id)) && styles.checkboxChecked]}>
-                            {tempQualitySelection.includes(String(option.id)) && <MaterialCommunityIcons name="check" size={14} color="#FFF" />}
-                          </View>
-                          <Text style={styles.checkboxLabel}>{option.name}</Text>
-                        </TouchableOpacity>
-                      ))
-                    )}
-                  </ScrollView>
-                )}
-                <View style={styles.multiSelectFooter}>
-                  <TouchableOpacity style={styles.clearSelectionBtn} onPress={() => setTempQualitySelection([])}>
-                    <Text style={styles.clearSelectionText}>Clear</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.applyBtn} onPress={applyQualityFilters}>
-                    <Text style={styles.applyBtnText}>Apply</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
 
-          {/* Status filter modal */}
-          <Modal visible={showStatusDropdown} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowStatusDropdown(false)}>
-            <View style={styles.centerModalRoot}>
-              <Pressable style={styles.modalBackdropFull} onPress={() => setShowStatusDropdown(false)} />
-              <View style={styles.multiSelectCard}>
-                <View style={styles.multiSelectHeader}>
-                  <Text style={styles.multiSelectTitle}>Filter by Status</Text>
-                  <TouchableOpacity onPress={() => setShowStatusDropdown(false)}>
-                    <MaterialCommunityIcons name="close" size={20} color={THEME.muted} />
+                <ScrollView style={{ maxHeight: height * 0.55 }}>
+                  <TouchableOpacity
+                    style={styles.assignedToggleRow}
+                    onPress={() => setTempAssignedToMe(prev => !prev)}
+                  >
+                    <View style={styles.assignedToggleLabel}>
+                      <MaterialCommunityIcons name="account-check-outline" size={16} color={THEME.text} />
+                      <Text style={styles.checkboxLabel}>Assigned to Me</Text>
+                    </View>
+                    <View style={[styles.checkbox, tempAssignedToMe && styles.checkboxChecked]}>
+                      {tempAssignedToMe && <MaterialCommunityIcons name="check" size={14} color="#FFF" />}
+                    </View>
                   </TouchableOpacity>
-                </View>
-                {loadingStatusOptions ? (
-                  <View style={styles.dropdownLoading}>
-                    <ActivityIndicator size="small" color={THEME.primary} />
-                    <Text style={styles.dropdownLoadingText}>Loading...</Text>
-                  </View>
-                ) : (
-                  <ScrollView style={{ maxHeight: height * 0.5 }}>
-                    {statusOptions.length === 0 ? (
-                      <Text style={styles.dropdownEmpty}>No status options available</Text>
-                    ) : (
-                      statusOptions.map(option => (
-                        <TouchableOpacity key={String(option.id)} style={styles.checkboxItem} onPress={() => toggleStatusOption(String(option.id))}>
-                          <View style={[styles.checkbox, tempStatusSelection.includes(String(option.id)) && styles.checkboxChecked]}>
-                            {tempStatusSelection.includes(String(option.id)) && <MaterialCommunityIcons name="check" size={14} color="#FFF" />}
-                          </View>
-                          <Text style={styles.checkboxLabel}>{option.name}</Text>
-                        </TouchableOpacity>
-                      ))
-                    )}
-                  </ScrollView>
-                )}
+
+                  <Text style={styles.filterSectionLabel}>Quality</Text>
+                  {loadingQualityOptions ? (
+                    <View style={styles.dropdownLoading}>
+                      <ActivityIndicator size="small" color={THEME.primary} />
+                      <Text style={styles.dropdownLoadingText}>Loading...</Text>
+                    </View>
+                  ) : qualityOptions.length === 0 ? (
+                    <Text style={styles.dropdownEmpty}>No quality options available</Text>
+                  ) : (
+                    qualityOptions.map(option => (
+                      <TouchableOpacity key={String(option.id)} style={styles.checkboxItem} onPress={() => toggleQualityOption(String(option.id))}>
+                        <View style={[styles.checkbox, tempQualitySelection.includes(String(option.id)) && styles.checkboxChecked]}>
+                          {tempQualitySelection.includes(String(option.id)) && <MaterialCommunityIcons name="check" size={14} color="#FFF" />}
+                        </View>
+                        <Text style={styles.checkboxLabel}>{option.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+
+                  <Text style={styles.filterSectionLabel}>Status</Text>
+                  {loadingStatusOptions ? (
+                    <View style={styles.dropdownLoading}>
+                      <ActivityIndicator size="small" color={THEME.primary} />
+                      <Text style={styles.dropdownLoadingText}>Loading...</Text>
+                    </View>
+                  ) : statusOptions.length === 0 ? (
+                    <Text style={styles.dropdownEmpty}>No status options available</Text>
+                  ) : (
+                    statusOptions.map(option => (
+                      <TouchableOpacity key={String(option.id)} style={styles.checkboxItem} onPress={() => toggleStatusOption(String(option.id))}>
+                        <View style={[styles.checkbox, tempStatusSelection.includes(String(option.id)) && styles.checkboxChecked]}>
+                          {tempStatusSelection.includes(String(option.id)) && <MaterialCommunityIcons name="check" size={14} color="#FFF" />}
+                        </View>
+                        <Text style={styles.checkboxLabel}>{option.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+
                 <View style={styles.multiSelectFooter}>
-                  <TouchableOpacity style={styles.clearSelectionBtn} onPress={() => setTempStatusSelection([])}>
-                    <Text style={styles.clearSelectionText}>Clear</Text>
+                  <TouchableOpacity style={styles.clearSelectionBtn} onPress={clearAllFilters}>
+                    <Text style={styles.clearSelectionText}>Clear All</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.applyBtn} onPress={applyStatusFilters}>
+                  <TouchableOpacity style={styles.applyBtn} onPress={applyAllFilters}>
                     <Text style={styles.applyBtnText}>Apply</Text>
                   </TouchableOpacity>
                 </View>
@@ -1275,11 +1260,19 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: THEME.primary, borderColor: THEME.primary },
   filterPillText: { fontSize: 12, fontWeight: '700', color: THEME.primary, maxWidth: 120 },
   filterPillTextActive: { color: '#FFF' },
+  filtersButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#FFF', borderRadius: 999,
+    paddingHorizontal: 14, height: 34,
+    borderWidth: 1, borderColor: THEME.border,
+  },
+  filtersButtonText: { fontSize: 13, fontWeight: '700', color: THEME.primary },
   clearFiltersBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: THEME.dangerLight, paddingHorizontal: 10,
     height: 32, borderRadius: 999,
     borderWidth: 1, borderColor: THEME.danger + '30',
+    marginLeft: 8,
   },
   clearFiltersText: { fontSize: 11, color: THEME.danger, fontWeight: '700' },
   resultCount: { fontSize: 11, color: THEME.muted, fontWeight: '600', marginLeft: 'auto' },
@@ -1504,6 +1497,15 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: THEME.primary, borderColor: THEME.primary },
   checkboxLabel: { fontSize: 14, color: THEME.text, fontWeight: '500' },
+  filterSectionLabel: {
+    fontSize: 12, fontWeight: '700', color: THEME.muted, textTransform: 'uppercase', letterSpacing: 0.3,
+    paddingHorizontal: 18, paddingTop: 14, paddingBottom: 4,
+  },
+  assignedToggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 10,
+  },
+  assignedToggleLabel: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   multiSelectFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

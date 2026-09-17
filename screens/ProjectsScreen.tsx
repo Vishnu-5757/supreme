@@ -699,8 +699,9 @@ export default function ProjectsScreen({ navigation }: any) {
   const [paymentFilter, setPaymentFilter] = useState('');
   const [milestoneFilter, setMilestoneFilter] = useState('');
   const [milestoneOptions, setMilestoneOptions] = useState<{ id: number; name: string }[]>([]);
-  const [paymentPickerVisible, setPaymentPickerVisible] = useState(false);
-  const [milestonePickerVisible, setMilestonePickerVisible] = useState(false);
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
+  const [tempPaymentFilter, setTempPaymentFilter] = useState('');
+  const [tempMilestoneFilter, setTempMilestoneFilter] = useState('');
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -899,6 +900,28 @@ export default function ProjectsScreen({ navigation }: any) {
     openDetail(project);
   };
 
+  const getFilterCount = () => (paymentFilter !== '' ? 1 : 0) + (milestoneFilter !== '' ? 1 : 0);
+
+  const openFiltersSheet = () => {
+    setTempPaymentFilter(paymentFilter);
+    setTempMilestoneFilter(milestoneFilter);
+    setShowFiltersSheet(true);
+  };
+
+  const applyAllFilters = () => {
+    setPaymentFilter(tempPaymentFilter);
+    setMilestoneFilter(tempMilestoneFilter);
+    setShowFiltersSheet(false);
+  };
+
+  const clearAllFilters = () => {
+    setPaymentFilter('');
+    setMilestoneFilter('');
+    setTempPaymentFilter('');
+    setTempMilestoneFilter('');
+    setShowFiltersSheet(false);
+  };
+
   if (loading && !refreshing && projects.length === 0 && !searchQuery && !paymentFilter && !milestoneFilter) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.bg }}>
@@ -981,49 +1004,23 @@ export default function ProjectsScreen({ navigation }: any) {
 
         <View style={styles.bodyWrap}>
         <View style={styles.filterStrip}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            <TouchableOpacity
-              style={[styles.filterPill, paymentFilter !== '' && styles.filterPillActive]}
-              onPress={() => setPaymentPickerVisible(true)}
-            >
-              <MaterialCommunityIcons
-                name={paymentFilter === 'loan' ? 'bank-outline' : 'cash'}
-                size={13}
-                color={paymentFilter !== '' ? '#FFF' : THEME.primary}
-              />
-              <Text style={[styles.filterPillText, paymentFilter !== '' && styles.filterPillTextActive]}>
-                {paymentFilter === 'cash' ? 'Cash' : paymentFilter === 'loan' ? 'Loan' : 'Payment'}
-              </Text>
-              <MaterialCommunityIcons name="chevron-down" size={13} color={paymentFilter !== '' ? '#FFF' : THEME.primary} />
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filtersButton, getFilterCount() > 0 && styles.filterPillActive]}
+            onPress={openFiltersSheet}
+          >
+            <MaterialCommunityIcons name="tune-variant" size={15} color={getFilterCount() > 0 ? '#FFF' : THEME.primary} />
+            <Text style={[styles.filtersButtonText, getFilterCount() > 0 && styles.filterPillTextActive]}>
+              Filters {getFilterCount() > 0 ? `(${getFilterCount()})` : ''}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={15} color={getFilterCount() > 0 ? '#FFF' : THEME.primary} />
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterPill, milestoneFilter !== '' && styles.filterPillActive]}
-              onPress={() => setMilestonePickerVisible(true)}
-            >
-              <MaterialCommunityIcons
-                name="map-marker-path"
-                size={13}
-                color={milestoneFilter !== '' ? '#FFF' : THEME.primary}
-              />
-              <Text style={[styles.filterPillText, milestoneFilter !== '' && styles.filterPillTextActive]} numberOfLines={1}>
-                {milestoneFilter
-                  ? (milestoneOptions.find(m => String(m.id) === milestoneFilter)?.name || 'Milestone')
-                  : 'Milestone'}
-              </Text>
-              <MaterialCommunityIcons name="chevron-down" size={13} color={milestoneFilter !== '' ? '#FFF' : THEME.primary} />
+          {getFilterCount() > 0 && (
+            <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearAllFilters}>
+              <MaterialCommunityIcons name="filter-off-outline" size={13} color={THEME.danger} />
+              <Text style={styles.clearFiltersText}>Clear</Text>
             </TouchableOpacity>
-
-            {(paymentFilter !== '' || milestoneFilter !== '') && (
-              <TouchableOpacity
-                style={styles.clearFiltersBtn}
-                onPress={() => { setPaymentFilter(''); setMilestoneFilter(''); }}
-              >
-                <MaterialCommunityIcons name="filter-off-outline" size={13} color={THEME.danger} />
-                <Text style={styles.clearFiltersText}>Clear</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
+          )}
         </View>
 
         <FlatList
@@ -1100,53 +1097,63 @@ export default function ProjectsScreen({ navigation }: any) {
   canTrack={canTrack}
 />
 
-        <Modal visible={paymentPickerVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setPaymentPickerVisible(false)}>
-          <Pressable style={styles.pickerOverlay} onPress={() => setPaymentPickerVisible(false)}>
+        <Modal visible={showFiltersSheet} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowFiltersSheet(false)}>
+          <Pressable style={styles.pickerOverlay} onPress={() => setShowFiltersSheet(false)}>
             <Pressable style={styles.pickerCard} onPress={() => {}}>
-              <Text style={styles.pickerTitle}>Payment Type</Text>
-              {[{ label: 'All', value: '' }, { label: 'Cash', value: 'cash' }, { label: 'Loan', value: 'loan' }].map(opt => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={styles.pickerOption}
-                  onPress={() => { setPaymentFilter(opt.value); setPaymentPickerVisible(false); }}
-                >
-                  <Text style={[styles.pickerOptionText, paymentFilter === opt.value && styles.pickerOptionTextActive]}>{opt.label}</Text>
-                  {paymentFilter === opt.value && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
+              <View style={styles.pickerHeaderRow}>
+                <Text style={styles.pickerTitle}>Filters</Text>
+                <TouchableOpacity onPress={() => setShowFiltersSheet(false)}>
+                  <MaterialCommunityIcons name="close" size={20} color={THEME.muted} />
                 </TouchableOpacity>
-              ))}
-            </Pressable>
-          </Pressable>
-        </Modal>
+              </View>
 
-        <Modal visible={milestonePickerVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setMilestonePickerVisible(false)}>
-          <Pressable style={styles.pickerOverlay} onPress={() => setMilestonePickerVisible(false)}>
-            <Pressable style={styles.pickerCard} onPress={() => {}}>
-              <Text style={styles.pickerTitle}>Pending Milestone</Text>
-              <Text style={styles.pickerSubtitle}>Shows projects currently waiting on this step</Text>
-              <ScrollView style={{ maxHeight: 320 }}>
+              <ScrollView style={{ maxHeight: 380 }}>
+                <Text style={styles.pickerSectionLabel}>Payment Type</Text>
+                {[{ label: 'All', value: '' }, { label: 'Cash', value: 'cash' }, { label: 'Loan', value: 'loan' }].map(opt => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={styles.pickerOption}
+                    onPress={() => setTempPaymentFilter(opt.value)}
+                  >
+                    <Text style={[styles.pickerOptionText, tempPaymentFilter === opt.value && styles.pickerOptionTextActive]}>{opt.label}</Text>
+                    {tempPaymentFilter === opt.value && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
+                  </TouchableOpacity>
+                ))}
+
+                <Text style={styles.pickerSectionLabel}>Pending Milestone</Text>
+                <Text style={styles.pickerSubtitle}>Shows projects currently waiting on this step</Text>
                 <TouchableOpacity
                   style={styles.pickerOption}
-                  onPress={() => { setMilestoneFilter(''); setMilestonePickerVisible(false); }}
+                  onPress={() => setTempMilestoneFilter('')}
                 >
-                  <Text style={[styles.pickerOptionText, milestoneFilter === '' && styles.pickerOptionTextActive]}>All</Text>
-                  {milestoneFilter === '' && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
+                  <Text style={[styles.pickerOptionText, tempMilestoneFilter === '' && styles.pickerOptionTextActive]}>All</Text>
+                  {tempMilestoneFilter === '' && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
                 </TouchableOpacity>
                 {milestoneOptions.map(opt => (
                   <TouchableOpacity
                     key={opt.id}
                     style={styles.pickerOption}
-                    onPress={() => { setMilestoneFilter(String(opt.id)); setMilestonePickerVisible(false); }}
+                    onPress={() => setTempMilestoneFilter(String(opt.id))}
                   >
-                    <Text style={[styles.pickerOptionText, milestoneFilter === String(opt.id) && styles.pickerOptionTextActive]} numberOfLines={1}>
+                    <Text style={[styles.pickerOptionText, tempMilestoneFilter === String(opt.id) && styles.pickerOptionTextActive]} numberOfLines={1}>
                       {opt.name}
                     </Text>
-                    {milestoneFilter === String(opt.id) && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
+                    {tempMilestoneFilter === String(opt.id) && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
                   </TouchableOpacity>
                 ))}
                 {milestoneOptions.length === 0 && (
                   <Text style={styles.pickerEmptyText}>No milestone steps found for your branch.</Text>
                 )}
               </ScrollView>
+
+              <View style={styles.pickerFooter}>
+                <TouchableOpacity style={styles.pickerClearBtn} onPress={clearAllFilters}>
+                  <Text style={styles.pickerClearBtnText}>Clear All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pickerApplyBtn} onPress={applyAllFilters}>
+                  <Text style={styles.pickerApplyBtnText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
             </Pressable>
           </Pressable>
         </Modal>
@@ -1202,8 +1209,18 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 13, color: THEME.text },
 
-  filterStrip: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, backgroundColor: THEME.bg },
+  filterStrip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, backgroundColor: THEME.bg,
+  },
   filterRow: { gap: 8, paddingRight: 10 },
+  filtersButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#FFF', borderRadius: 999,
+    paddingHorizontal: 14, height: 34,
+    borderWidth: 1, borderColor: THEME.border,
+  },
+  filtersButtonText: { fontSize: 13, fontWeight: '700', color: THEME.primary },
   filterPill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: '#FFF', borderRadius: 999,
@@ -1217,13 +1234,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: THEME.dangerLight, paddingHorizontal: 10,
     height: 32, borderRadius: 999, borderWidth: 1, borderColor: THEME.danger + '30',
+    marginLeft: 8,
   },
   clearFiltersText: { fontSize: 11, color: THEME.danger, fontWeight: '700' },
 
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   pickerCard: { width: '100%', maxWidth: 360, backgroundColor: '#FFF', borderRadius: 16, paddingVertical: 12, elevation: 10 },
+  pickerHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingTop: 4, paddingBottom: 6,
+  },
   pickerTitle: { fontSize: 15, fontWeight: '800', color: THEME.text, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 2 },
+  pickerSectionLabel: {
+    fontSize: 12, fontWeight: '700', color: THEME.muted, textTransform: 'uppercase', letterSpacing: 0.3,
+    paddingHorizontal: 18, paddingTop: 12, paddingBottom: 2,
+  },
   pickerSubtitle: { fontSize: 11.5, color: THEME.muted, paddingHorizontal: 18, paddingBottom: 8 },
+  pickerFooter: {
+    flexDirection: 'row', gap: 10,
+    paddingHorizontal: 18, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: THEME.border,
+  },
+  pickerClearBtn: {
+    flex: 1, paddingVertical: 11, borderRadius: 10,
+    borderWidth: 1, borderColor: THEME.border, alignItems: 'center',
+  },
+  pickerClearBtnText: { fontSize: 13, fontWeight: '700', color: THEME.textSecondary },
+  pickerApplyBtn: {
+    flex: 1.4, paddingVertical: 11, borderRadius: 10,
+    backgroundColor: THEME.primary, alignItems: 'center',
+  },
+  pickerApplyBtnText: { fontSize: 13, fontWeight: '800', color: '#FFF' },
   pickerOption: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 18, paddingVertical: 12,

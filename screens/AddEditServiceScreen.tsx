@@ -830,11 +830,8 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
           </TouchableOpacity>
 
           <View style={styles.topBarCenter}>
-            <View style={styles.topAvatar}>
-              <Text style={styles.topAvatarText}>{avatarLetter}</Text>
-            </View>
-            <Text style={styles.topTitle}>{isEdit ? 'Edit Service' : 'New Service'}</Text>
-            <Text style={styles.topSub}>
+            <Text style={styles.topTitle} numberOfLines={1}>{isEdit ? 'Edit Service' : 'New Service'}</Text>
+            <Text style={styles.topSub} numberOfLines={1}>
               {isEdit ? `Editing: ${existingService?.customer_name || ''}` : 'Fill in the details below'}
             </Text>
           </View>
@@ -843,7 +840,7 @@ export default function AddEditServiceScreen({ navigation, route }: Props) {
         </View>
 
        
-  <View style={{ flex: 1, backgroundColor: THEME.bg, marginTop: -24, paddingTop: 29, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }}>
+  <View style={{ flex: 1, backgroundColor: THEME.bg, paddingTop: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
         <KeyboardAvoidingView
           style={styles.keyboardWrap}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1180,8 +1177,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 34,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   backBtn: {
     width: 34,
@@ -1191,7 +1188,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topAvatar: {
     width: 52,
     height: 52,
@@ -1207,7 +1204,7 @@ const styles = StyleSheet.create({
   topAvatarText: { fontSize: 20, fontWeight: '800', color: THEME.primary },
   topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub: { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
-  keyboardWrap: { flex: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  keyboardWrap: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
   card: {

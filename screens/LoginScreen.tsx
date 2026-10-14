@@ -133,10 +133,10 @@ export default function LoginScreen({ navigation, route }: any) {
   const usernameRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
-  const headerFade = useRef(new Animated.Value(0)).current;
-  const cardFade = useRef(new Animated.Value(0)).current;
-  const cardTranslateY = useRef(new Animated.Value(24)).current;
-  const badgeScale = useRef(new Animated.Value(0.6)).current;
+  const headerFade = useRef(new Animated.Value(Platform.OS === 'web' ? 1 : 0)).current;
+  const cardFade = useRef(new Animated.Value(Platform.OS === 'web' ? 1 : 0)).current;
+  const cardTranslateY = useRef(new Animated.Value(Platform.OS === 'web' ? 0 : 24)).current;
+  const badgeScale = useRef(new Animated.Value(Platform.OS === 'web' ? 1 : 0.6)).current;
   const btnScale = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const messageOpacity = useRef(new Animated.Value(0)).current;
@@ -321,9 +321,8 @@ export default function LoginScreen({ navigation, route }: any) {
     }
   };
 
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
+  const inner = (
+    <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
         <Animated.View style={[styles.headerBackground, { height: headerHeight }]}>
@@ -446,6 +445,11 @@ export default function LoginScreen({ navigation, route }: any) {
           </Animated.View>
         </KeyboardAvoidingView>
       </View>
+  );
+
+  return Platform.OS === 'web' ? inner : (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      {inner}
     </TouchableWithoutFeedback>
   );
 }
@@ -573,6 +577,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     paddingBottom: 6,
     paddingTop: 0,
+    ...(Platform.OS === 'web' ? { outlineWidth: 0 } as any : {}),
   },
   floatUnderline: {
     position: 'absolute',

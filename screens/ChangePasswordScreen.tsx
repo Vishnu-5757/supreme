@@ -37,14 +37,14 @@ function FloatPw({ label, value, onChangeText, icon, show, onToggleShow, returnK
 
   return (
     <View>
-      <Animated.View style={{ height: labelH, opacity: labelOp, justifyContent: 'flex-end', paddingBottom: 4 }}>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: labelColor, letterSpacing: 0.4 }}>
+      <Animated.View style={{ height: labelH, opacity: labelOp, justifyContent: 'flex-end', paddingBottom: 3 }}>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: labelColor, letterSpacing: 0.4 }}>
           {label}
         </Text>
       </Animated.View>
       <View style={[fi.row, { borderColor, backgroundColor: bgColor }]}>
         <View style={fi.iconWrap}>
-          <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
+          <MaterialCommunityIcons name={icon} size={16} color={iconColor} />
         </View>
         <TextInput
           ref={inputRef}
@@ -63,7 +63,7 @@ function FloatPw({ label, value, onChangeText, icon, show, onToggleShow, returnK
           onBlur={() => setFocused(false)}
         />
         <TouchableOpacity style={fi.eyeWrap} onPress={onToggleShow} activeOpacity={0.6}>
-          <MaterialCommunityIcons name={show ? 'eye-off-outline' : 'eye-outline'} size={19} color="#9CA3AF" />
+          <MaterialCommunityIcons name={show ? 'eye-off-outline' : 'eye-outline'} size={17} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -71,10 +71,10 @@ function FloatPw({ label, value, onChangeText, icon, show, onToggleShow, returnK
 }
 
 const fi = StyleSheet.create({
-  row:     { flexDirection: 'row', alignItems: 'center', height: 54, borderRadius: 12, borderWidth: 1.5 },
-  iconWrap:{ width: 44, alignItems: 'center', justifyContent: 'center' },
-  eyeWrap: { width: 44, alignItems: 'center', justifyContent: 'center' },
-  input:   { flex: 1, fontSize: 15, color: '#111827', height: '100%' },
+  row:     { flexDirection: 'row', alignItems: 'center', height: 46, borderRadius: 11, borderWidth: 1.5 },
+  iconWrap:{ width: 38, alignItems: 'center', justifyContent: 'center' },
+  eyeWrap: { width: 38, alignItems: 'center', justifyContent: 'center' },
+  input:   { flex: 1, fontSize: 13.5, color: '#111827', height: '100%' },
 });
 
 // ── Strength bar ──────────────────────────────────────────────────────────────
@@ -146,22 +146,19 @@ export default function ChangePasswordScreen({ navigation }: any) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={s.topBarCenter}>
-            <View style={s.topIconCircle}>
-              <MaterialCommunityIcons name="lock-reset" size={24} color={P} />
-            </View>
-            <Text style={s.topTitle}>Change Password</Text>
-            <Text style={s.topSub}>Choose something strong</Text>
+            <Text style={s.topTitle} numberOfLines={1}>Change Password</Text>
+            <Text style={s.topSub} numberOfLines={1}>Choose something strong</Text>
           </View>
           <View style={{ width: 34 }} />
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#F4F5F7', marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#F4F5F7', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Icon + heading */}
           <View style={s.topSection}>
             <View style={s.lockBadge}>
-              <MaterialCommunityIcons name="lock-reset" size={30} color={P} />
+              <MaterialCommunityIcons name="lock-reset" size={24} color={P} />
             </View>
             <Text style={s.heading}>Set a new password</Text>
             <Text style={s.subheading}>Choose something strong and memorable.</Text>
@@ -223,7 +220,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
             {saving
               ? <ActivityIndicator size="small" color="#FFF" />
               : <>
-                  <MaterialCommunityIcons name="lock-check-outline" size={19} color="#FFF" />
+                  <MaterialCommunityIcons name="lock-check-outline" size={16} color="#FFF" />
                   <Text style={s.saveTxt}>Update Password</Text>
                 </>}
           </TouchableOpacity>
@@ -245,39 +242,39 @@ const s = StyleSheet.create({
   topBar: {
     backgroundColor: P,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18,
   },
   backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topIconCircle:{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   topTitle:     { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub:       { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 29, paddingBottom: 48 },
+  scroll: { paddingHorizontal: 14, paddingTop: 18, paddingBottom: 36 },
 
-  topSection: { alignItems: 'center', marginBottom: 28 },
+  topSection: { alignItems: 'center', marginBottom: 18 },
   lockBadge: {
-    width: 70, height: 70, borderRadius: 18,
+    width: 52, height: 52, borderRadius: 14,
     backgroundColor: '#FFF5F5', borderWidth: 1.5, borderColor: '#FECDD3',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
     elevation: 3, shadowColor: P, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  heading:    { fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 4 },
-  subheading: { fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
+  heading:    { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 3 },
+  subheading: { fontSize: 11.5, color: '#9CA3AF', fontWeight: '500' },
 
-  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  card: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
 
-  strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6 },
   strengthBar: { flex: 1, flexDirection: 'row', gap: 4 },
-  seg:         { flex: 1, height: 4, borderRadius: 2 },
-  strengthTxt: { fontSize: 11, fontWeight: '700', width: 44, textAlign: 'right' },
+  seg:         { flex: 1, height: 3.5, borderRadius: 2 },
+  strengthTxt: { fontSize: 10, fontWeight: '700', width: 40, textAlign: 'right' },
 
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  errorTxt: { fontSize: 12, color: '#EF4444', fontWeight: '600', flex: 1 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  errorTxt: { fontSize: 11, color: '#EF4444', fontWeight: '600', flex: 1 },
 
-  saveBtn: { height: 52, borderRadius: 14, backgroundColor: P, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, elevation: 4, shadowColor: P, shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-  saveTxt:  { fontSize: 15, fontWeight: '800', color: '#FFF' },
+  saveBtn: { height: 46, borderRadius: 12, backgroundColor: P, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 10, elevation: 4, shadowColor: P, shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  saveTxt:  { fontSize: 13.5, fontWeight: '800', color: '#FFF' },
 
-  cancelBtn: { alignItems: 'center', paddingVertical: 10 },
-  cancelTxt: { fontSize: 14, fontWeight: '600', color: '#9CA3AF' },
+  cancelBtn: { alignItems: 'center', paddingVertical: 8 },
+  cancelTxt: { fontSize: 12.5, fontWeight: '600', color: '#9CA3AF' },
 });

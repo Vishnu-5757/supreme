@@ -107,11 +107,11 @@ export function AppScreenSkeleton({ title = 'Loading' }: { title?: string }) {
               <Skeleton width={34} height={34} radius={17} style={sk.onDark} />
             </View>
           </View>
-          <Skeleton width="100%" height={38} radius={10} style={[sk.onDark, { marginTop: 14, opacity: 0.9 }]} />
         </View>
       </SafeAreaView>
 
       <View style={sk.body}>
+        <Skeleton width="100%" height={38} radius={10} style={{ marginBottom: 16 }} />
         <View style={sk.bodyHeadRow}>
           <Skeleton width={90} height={22} radius={11} />
           <Skeleton width={60} height={22} radius={11} />
@@ -150,12 +150,12 @@ const sk = StyleSheet.create({
   },
 
   screen: { flex: 1, backgroundColor: '#8E1C1C' },
-  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 26 },
+  header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 },
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   onDark: { backgroundColor: 'rgba(255,255,255,0.22)' },
   body: {
     flex: 1, backgroundColor: '#F5F6F8',
-    marginTop: -16, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    borderTopLeftRadius: 16, borderTopRightRadius: 16,
     overflow: 'hidden', padding: 16,
   },
   bodyHeadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },

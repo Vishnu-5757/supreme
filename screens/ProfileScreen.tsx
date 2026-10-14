@@ -48,11 +48,8 @@ export default function ProfileScreen({ navigation, route }: any) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={s.topBarCenter}>
-            <View style={s.topIconCircle}>
-              <Text style={s.topAvatarTxt}>{initials}</Text>
-            </View>
-            <Text style={s.topTitle}>My Profile</Text>
-            <Text style={s.topSub}>Manage your account</Text>
+            <Text style={s.topTitle} numberOfLines={1}>My Profile</Text>
+            <Text style={s.topSub} numberOfLines={1}>Manage your account</Text>
           </View>
           <View style={{ width: 34 }} />
         </View>
@@ -72,7 +69,7 @@ export default function ProfileScreen({ navigation, route }: any) {
               onPress={() => navigation.navigate('EditProfile', { user: { ...user, username: localUsername } })}
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="pencil-outline" size={15} color={P} />
+              <MaterialCommunityIcons name="pencil-outline" size={13} color={P} />
             </TouchableOpacity>
           </View>
 
@@ -81,7 +78,7 @@ export default function ProfileScreen({ navigation, route }: any) {
 
           {email ? (
             <View style={s.infoRow}>
-              <MaterialCommunityIcons name="email-outline" size={13} color="#9CA3AF" />
+              <MaterialCommunityIcons name="email-outline" size={11} color="#9CA3AF" />
               <Text style={s.infoTxt} numberOfLines={1}>{email}</Text>
             </View>
           ) : null}
@@ -89,7 +86,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           {branchName ? (
             <View style={s.chips}>
               <View style={s.chip}>
-                <MaterialCommunityIcons name="office-building-outline" size={11} color={P} />
+                <MaterialCommunityIcons name="office-building-outline" size={10} color={P} />
                 <Text style={s.chipTxt}>{branchName}</Text>
               </View>
             </View>
@@ -130,7 +127,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         <View style={m.overlay}>
           <View style={m.box}>
             <View style={m.iconBox}>
-              <MaterialCommunityIcons name="logout-variant" size={30} color="#DC2626" />
+              <MaterialCommunityIcons name="logout-variant" size={24} color="#DC2626" />
             </View>
             <Text style={m.title}>Log out?</Text>
             <Text style={m.sub}>You'll need to sign in again to continue.</Text>
@@ -155,10 +152,10 @@ function Row({ icon, iconColor, iconBg, label, labelColor, onPress }: any) {
   return (
     <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.65}>
       <View style={[s.rowIcon, { backgroundColor: iconBg }]}>
-        <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
+        <MaterialCommunityIcons name={icon} size={16} color={iconColor} />
       </View>
       <Text style={[s.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
-      <MaterialCommunityIcons name="chevron-right" size={18} color={labelColor ?? '#D1D5DB'} style={{ opacity: labelColor ? 0.5 : 1 }} />
+      <MaterialCommunityIcons name="chevron-right" size={16} color={labelColor ?? '#D1D5DB'} style={{ opacity: labelColor ? 0.5 : 1 }} />
     </TouchableOpacity>
   );
 }
@@ -170,63 +167,63 @@ const s = StyleSheet.create({
   topBar: {
     backgroundColor: P,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18,
   },
   backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topIconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   topAvatarTxt: { fontSize: 20, fontWeight: '800', color: P },
   topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub:   { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
 
-  scrollOuter: { flex: 1, backgroundColor: '#F4F5F7', marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
-  scroll: { paddingTop: 29, paddingHorizontal: 16, paddingBottom: 48 },
+  scrollOuter: { flex: 1, backgroundColor: '#F4F5F7', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
+  scroll: { paddingTop: 18, paddingHorizontal: 14, paddingBottom: 36 },
 
   /* hero profile card — premium "credit card" style */
   profileCard: {
     position: 'relative',
-    backgroundColor: '#FFFFFF', borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    backgroundColor: '#FFFFFF', borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
     overflow: 'hidden',
     borderWidth: 1, borderColor: 'rgba(142,28,28,0.08)',
     elevation: 4,
     shadowColor: '#421313', shadowOpacity: 0.10, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
   },
   cardWatermark: {
-    position: 'absolute', top: -30, right: -30,
-    width: 130, height: 130, borderRadius: 65,
+    position: 'absolute', top: -22, right: -22,
+    width: 100, height: 100, borderRadius: 50,
     backgroundColor: 'rgba(142,28,28,0.045)',
   },
   cardTopRow: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   editIconBtn: {
-    width: 32, height: 32, borderRadius: 10,
+    width: 26, height: 26, borderRadius: 8,
     backgroundColor: '#FFF5F5',
     borderWidth: 1, borderColor: '#FECDD3',
     alignItems: 'center', justifyContent: 'center',
   },
   avatarCircle: {
-    width: 60, height: 60, borderRadius: 30,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: P, alignItems: 'center', justifyContent: 'center',
   },
-  avatarTxt:   { fontSize: 22, fontWeight: '800', color: '#FFF' },
+  avatarTxt:   { fontSize: 17, fontWeight: '800', color: '#FFF' },
 
-  name:        { fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.3, marginBottom: 2 },
-  roleTxt:     { fontSize: 12.5, color: '#9CA3AF', fontWeight: '600', marginBottom: 8 },
-  infoRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
-  infoTxt:     { fontSize: 12.5, color: '#6B7280', fontWeight: '500' },
-  chips:       { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  chip:        { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FECDD3' },
-  chipTxt:     { fontSize: 11, fontWeight: '700', color: P },
+  name:        { fontSize: 15, fontWeight: '800', color: '#111827', letterSpacing: -0.3, marginBottom: 2 },
+  roleTxt:     { fontSize: 11, color: '#9CA3AF', fontWeight: '600', marginBottom: 6 },
+  infoRow:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 7 },
+  infoTxt:     { fontSize: 11, color: '#6B7280', fontWeight: '500' },
+  chips:       { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
+  chip:        { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 999, backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FECDD3' },
+  chipTxt:     { fontSize: 9.5, fontWeight: '700', color: P },
 
   /* menu */
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1.1, marginBottom: 8 },
+  sectionLabel: { fontSize: 10, fontWeight: '700', color: '#9CA3AF', letterSpacing: 1, marginBottom: 6 },
   menuCard: {
-    backgroundColor: '#FFF', borderRadius: 16, overflow: 'hidden',
-    marginBottom: 20,
+    backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden',
+    marginBottom: 14,
     elevation: 2,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
   },
@@ -234,26 +231,26 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#FEE2E2',
     shadowColor: '#DC2626', shadowOpacity: 0.06,
   },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
-  rowIcon: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: '#111827' },
-  sep: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 64 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, gap: 10 },
+  rowIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  rowLabel: { flex: 1, fontSize: 13.5, fontWeight: '600', color: '#111827' },
+  sep: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 54 },
 });
 
 const m = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 36 },
   box: {
-    backgroundColor: '#FFF', borderRadius: 24, alignItems: 'center',
-    width: '100%', maxWidth: 320, overflow: 'hidden',
+    backgroundColor: '#FFF', borderRadius: 20, alignItems: 'center',
+    width: '100%', maxWidth: 290, overflow: 'hidden',
     elevation: 24, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 28, shadowOffset: { width: 0, height: 12 },
   },
-  iconBox: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', marginTop: 28, marginBottom: 12 },
-  title:   { fontSize: 18, fontWeight: '800', color: '#111827' },
-  sub:     { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 6, marginBottom: 24, paddingHorizontal: 24 },
+  iconBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', marginTop: 22, marginBottom: 10 },
+  title:   { fontSize: 15.5, fontWeight: '800', color: '#111827' },
+  sub:     { fontSize: 11.5, color: '#6B7280', textAlign: 'center', marginTop: 5, marginBottom: 18, paddingHorizontal: 20 },
   divider: { height: 1, width: '100%', backgroundColor: '#F3F4F6' },
   row:     { flexDirection: 'row', width: '100%' },
-  btn:     { flex: 1, paddingVertical: 16, alignItems: 'center' },
+  btn:     { flex: 1, paddingVertical: 13, alignItems: 'center' },
   vline:   { width: 1, backgroundColor: '#F3F4F6' },
-  cancel:  { fontSize: 15, fontWeight: '600', color: '#6B7280' },
-  logout:  { fontSize: 15, fontWeight: '700', color: '#DC2626' },
+  cancel:  { fontSize: 13.5, fontWeight: '600', color: '#6B7280' },
+  logout:  { fontSize: 13.5, fontWeight: '700', color: '#DC2626' },
 });

@@ -54,9 +54,11 @@ const setProjectAccess = (perms: string[], access: ProjectAccess): string[] => {
 const BLANK_FORM = {
   first_name: '', last_name: '', email: '', username: '',
   password: '', confirm_password: '',
-  is_active: true, is_staff: false, is_head: false, is_technician: false,
+  is_active: true, is_technician: false,
+  is_head_lead: false, is_head_project: false, is_head_service: false,
   app_permissions: [] as string[],
   milestone_perms: [] as number[],
+  sub_milestone_perms: [] as number[],
 };
 
 type FormData = typeof BLANK_FORM;
@@ -268,6 +270,29 @@ const toggleStyles = StyleSheet.create({
   desc: { fontSize: 10, color: THEME.muted, marginTop: 1 },
 });
 
+// ─── Branch-wide Data Visibility Row (dims + disables when the matching
+// module isn't assigned — toggling "see all branch data" for a module the
+// user doesn't even have makes no sense) ───────────────────────────────────
+const BranchVisibilityRow = ({ icon, iconColor, iconBg, label, enabled, onDesc, offDesc, value, onValueChange }: any) => (
+  <View style={[toggleStyles.row, !enabled && { opacity: 0.45 }]}>
+    <View style={[toggleStyles.iconBox, { backgroundColor: iconBg }]}>
+      <MaterialCommunityIcons name={icon} size={14} color={iconColor} />
+    </View>
+    <View style={toggleStyles.text}>
+      <Text style={toggleStyles.label}>{label}</Text>
+      <Text style={toggleStyles.desc}>{enabled ? onDesc : offDesc}</Text>
+    </View>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      disabled={!enabled}
+      trackColor={{ false: THEME.border, true: iconColor + '60' }}
+      thumbColor={value ? iconColor : '#CBD5E1'}
+      ios_backgroundColor={THEME.border}
+    />
+  </View>
+);
+
 // ─── Unified App Access Modal (centered dialog — all apps together) ────────────
 const TOGGLE_APPS = [
   { id: 'service',   label: 'Service',   icon: 'toolbox-outline',        color: THEME.info,    bg: THEME.infoLight    },
@@ -297,15 +322,28 @@ const acStyles = StyleSheet.create({
 });
 
 // ─── Milestone Access (only shown when Project access = Full) ────────────────
-interface MilestoneDef { id: number; name: string; }
+interface MilestoneSubDef { id: number; name: string; }
+interface MilestoneDef { id: number; name: string; sub_steps: MilestoneSubDef[]; }
 
-const MilestoneChip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.8}
-    style={[msStyles.chip, selected && { borderColor: THEME.primary, backgroundColor: THEME.primaryLight }]}>
+const MilestoneRow = ({ index, label, selected, onPress }: { index: number; label: string; selected: boolean; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={msStyles.row}>
+    <View style={msStyles.stepNo}><Text style={msStyles.stepNoText}>{index}</Text></View>
     <View style={[msStyles.check, selected && { backgroundColor: THEME.primary, borderColor: THEME.primary }]}>
       {selected && <MaterialCommunityIcons name="check" size={10} color="#FFF" />}
     </View>
-    <Text style={[msStyles.chipLabel, selected && { color: THEME.primary, fontWeight: '700' }]} numberOfLines={1}>
+    <Text style={[msStyles.rowLabel, selected && { color: THEME.text, fontWeight: '700' }]} numberOfLines={1}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+const SubMilestoneRow = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={msStyles.subRow}>
+    <MaterialCommunityIcons name="subdirectory-arrow-right" size={13} color={THEME.mutedLight} style={{ marginRight: 2 }} />
+    <View style={[msStyles.check, msStyles.subCheck, selected && { backgroundColor: THEME.primary, borderColor: THEME.primary }]}>
+      {selected && <MaterialCommunityIcons name="check" size={9} color="#FFF" />}
+    </View>
+    <Text style={[msStyles.subRowLabel, selected && { color: THEME.text, fontWeight: '600' }]} numberOfLines={1}>
       {label}
     </Text>
   </TouchableOpacity>
@@ -313,13 +351,18 @@ const MilestoneChip = ({ label, selected, onPress }: { label: string; selected: 
 
 const msStyles = StyleSheet.create({
   card: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: THEME.border, padding: 12, marginBottom: 18 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   headerText: { fontSize: 11, fontWeight: '700', color: THEME.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3 },
   quickLink: { fontSize: 11, fontWeight: '700', color: THEME.primary },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1.5, borderColor: THEME.border, backgroundColor: '#FAFBFC', maxWidth: '100%' },
-  check: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: THEME.border, alignItems: 'center', justifyContent: 'center' },
-  chipLabel: { fontSize: 12, color: THEME.textSecondary },
+  list: { marginTop: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingLeft: 22 },
+  stepNo: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  stepNoText: { fontSize: 9, fontWeight: '800', color: THEME.muted },
+  check: { width: 17, height: 17, borderRadius: 5, borderWidth: 1.5, borderColor: THEME.border, alignItems: 'center', justifyContent: 'center' },
+  subCheck: { width: 15, height: 15, borderRadius: 4 },
+  rowLabel: { flex: 1, fontSize: 12.5, color: THEME.textSecondary },
+  subRowLabel: { flex: 1, fontSize: 11.5, color: THEME.muted },
 });
 
 // ─── ProjectCard (shows access level, opens picker on tap) ───────────────────
@@ -517,12 +560,16 @@ export default function UserFormScreen({
     setForm(prev => ({ ...prev, [key]: val }));
 
   const toggleApp = (id: string) =>
-    setForm(prev => ({
-      ...prev,
-      app_permissions: prev.app_permissions.includes(id)
+    setForm(prev => {
+      const wasOn = prev.app_permissions.includes(id);
+      const app_permissions = wasOn
         ? prev.app_permissions.filter(p => p !== id)
-        : [...prev.app_permissions, id],
-    }));
+        : [...prev.app_permissions, id];
+      const patch: Partial<FormData> = { app_permissions };
+      if (id === 'service') patch.is_head_service = !wasOn;
+      if (id === 'lead') patch.is_head_lead = !wasOn;
+      return { ...prev, ...patch };
+    });
 
   const toggleMilestone = (id: number) =>
     setForm(prev => ({
@@ -530,6 +577,14 @@ export default function UserFormScreen({
       milestone_perms: prev.milestone_perms.includes(id)
         ? prev.milestone_perms.filter(p => p !== id)
         : [...prev.milestone_perms, id],
+    }));
+
+  const toggleSubMilestone = (id: number) =>
+    setForm(prev => ({
+      ...prev,
+      sub_milestone_perms: prev.sub_milestone_perms.includes(id)
+        ? prev.sub_milestone_perms.filter(p => p !== id)
+        : [...prev.sub_milestone_perms, id],
     }));
 
   // Fetch the milestone catalog once (used to render the checkbox list and
@@ -540,7 +595,15 @@ export default function UserFormScreen({
       try {
         const res = await apiRequest(`${API_BASE_URL}/users/api/milestones/`);
         const data = await res.json();
-        if (!cancelled && Array.isArray(data)) setMilestoneCatalog(data);
+        if (cancelled || !Array.isArray(data)) return;
+        setMilestoneCatalog(data);
+        if (!isEdit) {
+          setForm(prev => ({
+            ...prev,
+            milestone_perms: data.map((m: MilestoneDef) => m.id),
+            sub_milestone_perms: data.flatMap((m: MilestoneDef) => m.sub_steps.map(s => s.id)),
+          }));
+        }
       } catch {
         // Non-fatal — Project access can still be set to Full without this
         // list; the checkboxes just won't render if it fails to load.
@@ -684,6 +747,7 @@ export default function UserFormScreen({
     setForm(prev => ({
       ...prev,
       app_permissions: setProjectAccess(prev.app_permissions, access),
+      is_head_project: access !== 'none',
       milestone_perms: (!wasFull && access === 'full')
         ? milestoneCatalog.map(m => m.id)
         : prev.milestone_perms,
@@ -724,17 +788,8 @@ export default function UserFormScreen({
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={styles.topBarCenter}>
-            {avatarLetter ? (
-              <View style={styles.topAvatar}>
-                <Text style={styles.topAvatarText}>{avatarLetter}</Text>
-              </View>
-            ) : (
-              <View style={styles.topIconCircle}>
-                <MaterialCommunityIcons name="account-plus-outline" size={20} color={THEME.primary} />
-              </View>
-            )}
-            <Text style={styles.topTitle}>{pageTitle}</Text>
-            <Text style={styles.topSub}>{pageSubtitle}</Text>
+            <Text style={styles.topTitle} numberOfLines={1}>{pageTitle}</Text>
+            <Text style={styles.topSub} numberOfLines={1}>{pageSubtitle}</Text>
           </View>
           <View style={{ width: 34 }} />
         </View>
@@ -747,7 +802,7 @@ export default function UserFormScreen({
         )}
 
         <KeyboardAvoidingView
-  style={[styles.keyboardWrap, { backgroundColor: THEME.bg, marginTop: -24 ,paddingTop: 29}]}
+  style={[styles.keyboardWrap, { backgroundColor: THEME.bg, paddingTop: 16 }]}
   behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 >
           <ScrollView
@@ -875,14 +930,8 @@ export default function UserFormScreen({
               <ToggleItem icon="account-check-outline" iconColor={THEME.success} iconBg={THEME.successLight}
                 label="Active Account" desc="User can sign in" value={form.is_active} onValueChange={set('is_active')} />
               <View style={styles.sep} />
-              <ToggleItem icon="shield-account-outline" iconColor={THEME.warning} iconBg={THEME.warningLight}
-                label="Staff Access" desc="Access to admin features" value={form.is_staff} onValueChange={set('is_staff')} />
-              <View style={styles.sep} />
-              <ToggleItem icon="office-building-outline" iconColor={THEME.info} iconBg={THEME.infoLight}
-                label="Head Office" desc="Head office privileges" value={form.is_head} onValueChange={set('is_head')} />
-              <View style={styles.sep} />
-              <ToggleItem icon="wrench-outline" iconColor={THEME.primary} iconBg={THEME.primaryLight}
-                label="Technician" desc="Assigned to service jobs" value={form.is_technician} onValueChange={set('is_technician')} />
+              <ToggleItem icon="account-hard-hat-outline" iconColor={THEME.warning} iconBg={THEME.warningLight}
+                label="Technician" desc="Marks this user as a field technician" value={form.is_technician} onValueChange={set('is_technician')} />
             </View>
 
             <SectionLabel icon="apps" title="Assign App Access" />
@@ -910,27 +959,62 @@ export default function UserFormScreen({
                       {form.milestone_perms.length} / {milestoneCatalog.length} editable
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
-                      <TouchableOpacity onPress={() => set('milestone_perms')(milestoneCatalog.map(m => m.id))}>
+                      <TouchableOpacity onPress={() => setForm(prev => ({
+                        ...prev,
+                        milestone_perms: milestoneCatalog.map(m => m.id),
+                        sub_milestone_perms: milestoneCatalog.flatMap(m => m.sub_steps.map(s => s.id)),
+                      }))}>
                         <Text style={msStyles.quickLink}>All</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => set('milestone_perms')([])}>
+                      <TouchableOpacity onPress={() => setForm(prev => ({ ...prev, milestone_perms: [], sub_milestone_perms: [] }))}>
                         <Text style={msStyles.quickLink}>None</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
-                  <View style={msStyles.grid}>
-                    {milestoneCatalog.map(m => (
-                      <MilestoneChip
-                        key={m.id}
-                        label={m.name}
-                        selected={form.milestone_perms.includes(m.id)}
-                        onPress={() => toggleMilestone(m.id)}
-                      />
+                  <View style={msStyles.list}>
+                    {milestoneCatalog.map((m, idx) => (
+                      <React.Fragment key={m.id}>
+                        <MilestoneRow
+                          index={idx + 1}
+                          label={m.name}
+                          selected={form.milestone_perms.includes(m.id)}
+                          onPress={() => toggleMilestone(m.id)}
+                        />
+                        {m.sub_steps.map(sub => (
+                          <SubMilestoneRow
+                            key={sub.id}
+                            label={sub.name}
+                            selected={form.sub_milestone_perms.includes(sub.id)}
+                            onPress={() => toggleSubMilestone(sub.id)}
+                          />
+                        ))}
+                      </React.Fragment>
                     ))}
                   </View>
                 </View>
               </>
             )}
+
+            <SectionLabel icon="eye-outline" title="See All Branch Data" />
+            <Text style={styles.bvIntro}>
+              Switch ON for an assigned module below so this user sees every record in the branch for it — not just what they personally created. Leave OFF and they'll only see their own.
+            </Text>
+            <View style={styles.toggleCard}>
+              <BranchVisibilityRow icon="account-tie-outline" iconColor={THEME.info} iconBg={THEME.infoLight}
+                label="Lead" enabled={form.app_permissions.includes('lead')}
+                onDesc="All leads in the branch, not just theirs" offDesc="Assign Lead above to enable"
+                value={form.is_head_lead} onValueChange={set('is_head_lead')} />
+              <View style={styles.sep} />
+              <BranchVisibilityRow icon="briefcase-outline" iconColor={THEME.info} iconBg={THEME.infoLight}
+                label="Project" enabled={projectAccess !== 'none'}
+                onDesc="All projects in the branch, not just theirs" offDesc="Assign Project above to enable"
+                value={form.is_head_project} onValueChange={set('is_head_project')} />
+              <View style={styles.sep} />
+              <BranchVisibilityRow icon="wrench-outline" iconColor={THEME.info} iconBg={THEME.infoLight}
+                label="Service" enabled={form.app_permissions.includes('service')}
+                onDesc="All tickets in the branch, not just theirs" offDesc="Assign Service above to enable"
+                value={form.is_head_service} onValueChange={set('is_head_service')} />
+            </View>
           </ScrollView>
 
           {/* Fixed Footer (pinned at bottom) */}
@@ -974,15 +1058,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 34,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   backBtn: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topAvatar: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF',
     alignItems: 'center', justifyContent: 'center',
@@ -1002,7 +1086,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16, marginTop: 10, padding: 10, borderRadius: 8,
   },
   errorBannerText: { fontSize: 12, color: THEME.danger, flex: 1 },
-  keyboardWrap: { flex: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  keyboardWrap: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
   row: { flexDirection: 'row', gap: 12 },
@@ -1018,6 +1102,7 @@ const styles = StyleSheet.create({
   },
   sep: { height: 1, backgroundColor: THEME.border },
   appsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
+  bvIntro: { fontSize: 11, color: THEME.muted, lineHeight: 16, marginTop: -6, marginBottom: 10 },
 
   // Fixed footer
   fixedFooter: {

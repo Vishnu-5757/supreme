@@ -373,6 +373,7 @@ export default function UsersScreen({ navigation }: any) {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fabAnim = useRef(new Animated.Value(1)).current;
   const lastScrollY = useRef(0);
+  const fabHidden = useRef(false);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -476,11 +477,17 @@ export default function UsersScreen({ navigation }: any) {
     const dy = y - lastScrollY.current;
     lastScrollY.current = y;
     if (dy > 8 && y > 60) {
-      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+      if (!fabHidden.current) {
+        fabHidden.current = true;
+        Animated.timing(fabAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+      }
     } else if (dy < -8) {
-      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      if (fabHidden.current) {
+        fabHidden.current = false;
+        Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      }
     }
-  }, []);
+  }, [fabAnim]);
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -551,6 +558,10 @@ export default function UsersScreen({ navigation }: any) {
             </View>
           </View>
 
+        </View>
+
+        <View style={styles.bodyWrap}>
+        <View style={styles.searchBarOuter}>
           <View style={styles.searchBar}>
             <MaterialCommunityIcons name="magnify" size={16} color={THEME.muted} />
             <TextInput
@@ -568,8 +579,6 @@ export default function UsersScreen({ navigation }: any) {
             )}
           </View>
         </View>
-
-        <View style={styles.bodyWrap}>
         {/* ── FILTER STRIP ── */}
         <View style={styles.filterStrip}>
           <TouchableOpacity
@@ -704,9 +713,8 @@ const styles = StyleSheet.create({
   bodyWrap: {
     flex: 1,
     backgroundColor: THEME.bg,
-    marginTop: -16,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
   },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
@@ -716,8 +724,8 @@ const styles = StyleSheet.create({
   headerWrap: {
     backgroundColor: THEME.primary,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 26,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -775,10 +783,12 @@ const styles = StyleSheet.create({
   },
 
   // ── Search ──
+  searchBarOuter: { paddingHorizontal: 14, paddingTop: 14 },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FFF', borderRadius: 10,
-    paddingHorizontal: 12, height: 38, marginTop: 12,
+    paddingHorizontal: 12, height: 38,
+    borderWidth: 1, borderColor: THEME.border,
   },
   searchInput: { flex: 1, fontSize: 13, color: THEME.text, paddingVertical: 0 },
 

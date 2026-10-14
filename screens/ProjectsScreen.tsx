@@ -95,18 +95,20 @@ export const getInitials = (name: string) => {
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.substring(0, 2).toUpperCase();
 };
-// Milestone steps (mirrors backend STEP_ORDER / FIELD_MAP)
-const MILESTONE_STEPS = [
-  { key: 'subsidy', label: 'Subsidy Registration', doneField: 'subsidy_registration_done', residentialOnly: true },
-  { key: 'loan', label: 'Loan Paperwork', doneField: 'loan_paperwork_done' },
-  { key: 'kseb_feasibility', label: 'KSEB Feasibility', doneField: 'kseb_feasibility_done' },
-  { key: 'material_delivery', label: 'Material Delivery', doneField: 'material_delivery_done' },
-  { key: 'work_started', label: 'Work Started', doneField: 'work_started_done' },
-  { key: 'work_completed', label: 'Work Completed', doneField: 'work_completed_done' },
-  { key: 'kseb_completion_report', label: 'KSEB Completion Report', doneField: 'kseb_completion_report_done' },
-  { key: 'completion_approved', label: 'Completion Approved', doneField: 'completion_approved_done' },
-  { key: 'plant_commissioned', label: 'Plant Commissioned', doneField: 'plant_commissioned_done' },
-];
+// One row of the tracking API's `steps` list - already ordered and filtered
+// server-side for this project's branch, category and payment type.
+type TrackingSubStep = { id: number; name: string; date: string | null; done: boolean };
+type TrackingStep = {
+  id: number;
+  name: string;
+  subtitle: string;
+  date: string | null;
+  remarks: string;
+  done: boolean;
+  skipped: boolean;
+  sub_steps: TrackingSubStep[];
+};
+
 // Toast
 const Toast = ({ message, type, visible, onHide }: any) => {
   const translateY = useRef(new Animated.Value(-100)).current;
@@ -265,8 +267,7 @@ const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCal
   const insets = useSafeAreaInsets();
   const { apiRequest } = useAuthApi();
 
-  const [trackingFields, setTrackingFields] = useState<Record<string, any>>({});
-  const [trackingCategory, setTrackingCategory] = useState('RES');
+  const [trackingSteps, setTrackingSteps] = useState<TrackingStep[]>([]);
   const [trackingLoading, setTrackingLoading] = useState(false);
 
   useEffect(() => {
@@ -291,8 +292,7 @@ const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCal
       .then(res => (res.ok ? res.json() : null))
       .then(json => {
         if (cancelled || !json) return;
-        setTrackingFields(json.fields || {});
-        setTrackingCategory(json.category || 'RES');
+        setTrackingSteps(json.steps || []);
       })
       .catch(() => {})
       .finally(() => {
@@ -338,10 +338,14 @@ const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCal
   const payStyle = getPaymentTypeStyle(project.payment_type);
   const statusMeta = getStatusMeta(total_paid, total_amount);
 
-  const pendingMilestones = MILESTONE_STEPS.filter(step => {
-    if (trackingCategory === 'COM' && step.residentialOnly) return false;
-    if (project.payment_type === 'cash' && step.key === 'loan') return false;
-    return !trackingFields[step.doneField];
+  // A step is listed while it is still open, or while it is finished but has
+  // checklist items left. Skipped steps are out of the way, so they are not.
+  const stepsDone = trackingSteps.filter(st => st.done).length;
+  const stepsSkipped = trackingSteps.filter(st => st.skipped && !st.done).length;
+  const nextUpId = trackingSteps.find(st => !st.done && !st.skipped)?.id;
+  const pendingSteps = trackingSteps.filter(st => {
+    if (st.skipped && !st.done) return false;
+    return !st.done || st.sub_steps.some(sub => !sub.done);
   });
 
   return (
@@ -446,30 +450,110 @@ const ProjectDetailModal = ({ project, visible, onClose, onEdit, onDelete, onCal
             </View>
 
             <Text style={styles.sectionLabel}>PENDING MILESTONES</Text>
-            <View style={styles.detailCard}>
-              {trackingLoading ? (
-                <View style={{ padding: 16, alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color={THEME.primary} />
-                </View>
-              ) : pendingMilestones.length === 0 ? (
-                <View style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <MaterialCommunityIcons name="check-circle" size={18} color={THEME.success} />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.success }}>
-                    All milestones completed
+            {trackingLoading ? (
+              <View style={[styles.detailCard, { padding: 16, alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color={THEME.primary} />
+              </View>
+            ) : trackingSteps.length === 0 ? (
+              <View style={[styles.detailCard, { padding: 14 }]}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: THEME.muted }}>
+                  Milestone details aren't available for this project.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.pmSummary}>
+                  <Text style={styles.pmSummaryText}>
+                    <Text style={styles.pmSummaryStrong}>{stepsDone}</Text> of {trackingSteps.length} steps done
+                    {stepsSkipped > 0 ? `  ·  ${stepsSkipped} skipped` : ''}
                   </Text>
+                  <View style={styles.pmTrack}>
+                    <View style={[styles.pmFill, { width: `${(stepsDone / trackingSteps.length) * 100}%` }]} />
+                  </View>
                 </View>
-              ) : (
-                pendingMilestones.map(step => (
-                  <DetailRow
-                    key={step.key}
-                    icon="progress-clock"
-                    label={step.label}
-                    value="Pending"
-                    color={THEME.warning}
-                  />
-                ))
-              )}
-            </View>
+
+                {pendingSteps.length === 0 ? (
+                  <View style={[styles.detailCard, { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                    <MaterialCommunityIcons name="check-circle" size={18} color={THEME.success} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: THEME.success }}>
+                      All milestones completed
+                    </Text>
+                  </View>
+                ) : (
+                  pendingSteps.map(st => {
+                    const subDone = st.sub_steps.filter(sub => sub.done).length;
+                    const isNext = st.id === nextUpId;
+                    return (
+                      <View key={st.id} style={[styles.pmCard, isNext && styles.pmCardNext]}>
+                        <View style={styles.pmHead}>
+                          <View style={[styles.pmIcon, isNext && { backgroundColor: THEME.primaryLight }]}>
+                            <MaterialCommunityIcons
+                              name={st.done ? 'playlist-check' : 'progress-clock'}
+                              size={16}
+                              color={isNext ? THEME.primary : THEME.warning}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.pmTitle} numberOfLines={1}>{st.name}</Text>
+                            <Text style={styles.pmSub} numberOfLines={1}>
+                              {st.done ? 'Step completed · checklist still open' : st.subtitle || 'Waiting to be completed'}
+                            </Text>
+                          </View>
+                          {isNext && (
+                            <View style={styles.pmBadge}>
+                              <Text style={styles.pmBadgeText}>NEXT UP</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {(!!st.date || !!st.remarks) && (
+                          <View style={styles.pmMetaBlock}>
+                            {!!st.date && (
+                              <View style={styles.pmMetaRow}>
+                                <MaterialCommunityIcons name="calendar-range" size={13} color={THEME.muted} />
+                                <Text style={styles.pmMetaText}>{formatDate(st.date)}</Text>
+                              </View>
+                            )}
+                            {!!st.remarks && (
+                              <View style={styles.pmMetaRow}>
+                                <MaterialCommunityIcons name="text-box-outline" size={13} color={THEME.muted} />
+                                <Text style={styles.pmMetaText} numberOfLines={3}>{st.remarks}</Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        {st.sub_steps.length > 0 && (
+                          <View style={styles.pmSubBlock}>
+                            <View style={styles.pmSubHeader}>
+                              <Text style={styles.pmSubHeaderText}>CHECKLIST</Text>
+                              <Text style={[styles.pmSubCount, subDone === st.sub_steps.length && { color: THEME.success }]}>
+                                {subDone}/{st.sub_steps.length}
+                              </Text>
+                            </View>
+                            {st.sub_steps.map(sub => (
+                              <View key={sub.id} style={styles.pmSubRow}>
+                                <MaterialCommunityIcons
+                                  name={sub.done ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                                  size={16}
+                                  color={sub.done ? THEME.success : THEME.mutedLight}
+                                />
+                                <Text style={[styles.pmSubName, sub.done && { color: THEME.text }]} numberOfLines={1}>
+                                  {sub.name}
+                                </Text>
+                                <Text style={[styles.pmSubDate, sub.done && { color: THEME.success }]}>
+                                  {sub.date ? formatDate(sub.date) : sub.done ? 'Done' : 'Pending'}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </>
+            )}
 
             <View style={{ height: 36 }} />
           </ScrollView>
@@ -698,7 +782,9 @@ export default function ProjectsScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [milestoneFilter, setMilestoneFilter] = useState('');
-  const [milestoneOptions, setMilestoneOptions] = useState<{ id: number; name: string }[]>([]);
+  const [milestoneOptions, setMilestoneOptions] = useState<
+    { id: number; name: string; sub_steps: { id: number; name: string }[] }[]
+  >([]);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
   const [tempPaymentFilter, setTempPaymentFilter] = useState('');
   const [tempMilestoneFilter, setTempMilestoneFilter] = useState('');
@@ -721,24 +807,31 @@ export default function ProjectsScreen({ navigation }: any) {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fabAnim = useRef(new Animated.Value(1)).current;
   const lastScrollY = useRef(0);
+  const fabHidden = useRef(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
   }, []);
 
   const fetchProjects = useCallback(
-    async (page: number, shouldAppend: boolean, search: string, payment: string, milestonePending: string = '') => {
+    async (page: number, shouldAppend: boolean, search: string, payment: string, milestonePending: string = '', silent: boolean = false) => {
       if (isFetching.current) return;
       isFetching.current = true;
 
-      if (!shouldAppend) setLoading(true);
-      else setLoadingMore(true);
+      if (!shouldAppend && !silent) setLoading(true);
+      else if (shouldAppend) setLoadingMore(true);
 
       try {
         const params = new URLSearchParams();
         if (search) params.append('q', search);
         if (payment) params.append('payment_type', payment);
-        if (milestonePending) params.append('milestone_pending', milestonePending);
+        // Encoded as "m:<definitionId>" for a step or "s:<subStepId>" for a
+        // checklist item under one — see the Filters sheet below.
+        if (milestonePending.startsWith('s:')) {
+          params.append('sub_milestone_pending', milestonePending.slice(2));
+        } else if (milestonePending.startsWith('m:')) {
+          params.append('milestone_pending', milestonePending.slice(2));
+        }
         params.append('page', page.toString());
         params.append('page_size', '20');
 
@@ -784,7 +877,9 @@ export default function ProjectsScreen({ navigation }: any) {
         mountFetchDone.current = true;
         return;
       }
-      fetchProjects(1, false, searchQuery, paymentFilter, milestoneFilter);
+      // Silent — refreshes in the background on tab refocus, without
+      // flashing the full loading skeleton over data that's already shown.
+      fetchProjects(1, false, searchQuery, paymentFilter, milestoneFilter, true);
       refreshBadgeFromServer();
     }, []),
   );
@@ -813,11 +908,17 @@ export default function ProjectsScreen({ navigation }: any) {
     const dy = y - lastScrollY.current;
     lastScrollY.current = y;
     if (dy > 8 && y > 60) {
-      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+      if (!fabHidden.current) {
+        fabHidden.current = true;
+        Animated.timing(fabAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+      }
     } else if (dy < -8) {
-      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      if (fabHidden.current) {
+        fabHidden.current = false;
+        Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      }
     }
-  }, []);
+  }, [fabAnim]);
 
   const navigateToAddProject = () => {
     navigation.navigate('AddEditProject', {
@@ -985,6 +1086,10 @@ export default function ProjectsScreen({ navigation }: any) {
               <AccountMenu navigation={navigation} />
             </View>
           </View>
+        </View>
+
+        <View style={styles.bodyWrap}>
+        <View style={styles.searchBarOuter}>
           <View style={styles.searchBar}>
             <MaterialCommunityIcons name="magnify" size={16} color={THEME.muted} />
             <TextInput
@@ -1001,8 +1106,6 @@ export default function ProjectsScreen({ navigation }: any) {
             )}
           </View>
         </View>
-
-        <View style={styles.bodyWrap}>
         <View style={styles.filterStrip}>
           <TouchableOpacity
             style={[styles.filtersButton, getFilterCount() > 0 && styles.filterPillActive]}
@@ -1130,16 +1233,30 @@ export default function ProjectsScreen({ navigation }: any) {
                   {tempMilestoneFilter === '' && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
                 </TouchableOpacity>
                 {milestoneOptions.map(opt => (
-                  <TouchableOpacity
-                    key={opt.id}
-                    style={styles.pickerOption}
-                    onPress={() => setTempMilestoneFilter(String(opt.id))}
-                  >
-                    <Text style={[styles.pickerOptionText, tempMilestoneFilter === String(opt.id) && styles.pickerOptionTextActive]} numberOfLines={1}>
-                      {opt.name}
-                    </Text>
-                    {tempMilestoneFilter === String(opt.id) && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
-                  </TouchableOpacity>
+                  <React.Fragment key={opt.id}>
+                    <TouchableOpacity
+                      style={styles.pickerOption}
+                      onPress={() => setTempMilestoneFilter(`m:${opt.id}`)}
+                    >
+                      <Text style={[styles.pickerOptionText, tempMilestoneFilter === `m:${opt.id}` && styles.pickerOptionTextActive]} numberOfLines={1}>
+                        {opt.name}
+                      </Text>
+                      {tempMilestoneFilter === `m:${opt.id}` && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
+                    </TouchableOpacity>
+                    {opt.sub_steps.map(sub => (
+                      <TouchableOpacity
+                        key={sub.id}
+                        style={[styles.pickerOption, styles.pickerSubOption]}
+                        onPress={() => setTempMilestoneFilter(`s:${sub.id}`)}
+                      >
+                        <MaterialCommunityIcons name="subdirectory-arrow-right" size={13} color={THEME.mutedLight} style={{ marginRight: 4 }} />
+                        <Text style={[styles.pickerOptionText, styles.pickerSubOptionText, tempMilestoneFilter === `s:${sub.id}` && styles.pickerOptionTextActive]} numberOfLines={1}>
+                          {sub.name}
+                        </Text>
+                        {tempMilestoneFilter === `s:${sub.id}` && <MaterialCommunityIcons name="check" size={16} color={THEME.primary} />}
+                      </TouchableOpacity>
+                    ))}
+                  </React.Fragment>
                 ))}
                 {milestoneOptions.length === 0 && (
                   <Text style={styles.pickerEmptyText}>No milestone steps found for your branch.</Text>
@@ -1170,9 +1287,8 @@ const styles = StyleSheet.create({
   bodyWrap: {
     flex: 1,
     backgroundColor: THEME.bg,
-    marginTop: -16,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
   },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
@@ -1181,8 +1297,8 @@ const styles = StyleSheet.create({
   headerWrap: {
     backgroundColor: THEME.primary,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 26,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { flex: 1, paddingRight: 10 },
@@ -1202,10 +1318,12 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
 
+  searchBarOuter: { paddingHorizontal: 14, paddingTop: 14 },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FFF', borderRadius: 10,
-    paddingHorizontal: 12, height: 38, marginTop: 12,
+    paddingHorizontal: 12, height: 38,
+    borderWidth: 1, borderColor: THEME.border,
   },
   searchInput: { flex: 1, fontSize: 13, color: THEME.text },
 
@@ -1271,6 +1389,8 @@ const styles = StyleSheet.create({
   },
   pickerOptionText: { fontSize: 13.5, color: THEME.text, flex: 1, marginRight: 8 },
   pickerOptionTextActive: { color: THEME.primary, fontWeight: '700' },
+  pickerSubOption: { paddingLeft: 30, paddingVertical: 9 },
+  pickerSubOptionText: { fontSize: 12.5, color: THEME.muted },
   pickerEmptyText: { fontSize: 12.5, color: THEME.muted, paddingHorizontal: 18, paddingVertical: 12, fontStyle: 'italic' },
 
   listContent: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 22 },
@@ -1372,6 +1492,30 @@ const styles = StyleSheet.create({
     letterSpacing: 1, marginTop: 20, marginBottom: 8,
   },
   detailCard: { backgroundColor: THEME.bg, borderRadius: 16, overflow: 'hidden' },
+
+  pmSummary: { marginBottom: 10 },
+  pmSummaryText: { fontSize: 12, fontWeight: '600', color: THEME.muted },
+  pmSummaryStrong: { fontWeight: '800', color: THEME.text },
+  pmTrack: { height: 5, borderRadius: 3, backgroundColor: THEME.border, marginTop: 6, overflow: 'hidden' },
+  pmFill: { height: '100%', borderRadius: 3, backgroundColor: THEME.success },
+  pmCard: { backgroundColor: THEME.bg, borderRadius: 16, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'transparent' },
+  pmCardNext: { borderColor: 'rgba(142,28,28,0.25)', backgroundColor: '#FFF' },
+  pmHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pmIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: THEME.warningLight, alignItems: 'center', justifyContent: 'center' },
+  pmTitle: { fontSize: 14, fontWeight: '800', color: THEME.text },
+  pmSub: { fontSize: 11, fontWeight: '600', color: THEME.muted, marginTop: 1 },
+  pmBadge: { backgroundColor: THEME.primaryLight, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  pmBadgeText: { fontSize: 9, fontWeight: '800', color: THEME.primary, letterSpacing: 0.5 },
+  pmMetaBlock: { marginTop: 10, gap: 5 },
+  pmMetaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  pmMetaText: { flex: 1, fontSize: 12, fontWeight: '600', color: THEME.textSecondary },
+  pmSubBlock: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: THEME.border, gap: 6 },
+  pmSubHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pmSubHeaderText: { fontSize: 9.5, fontWeight: '800', color: THEME.muted, letterSpacing: 0.8 },
+  pmSubCount: { fontSize: 11, fontWeight: '800', color: THEME.muted },
+  pmSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pmSubName: { flex: 1, fontSize: 12.5, fontWeight: '600', color: THEME.textSecondary },
+  pmSubDate: { fontSize: 11, fontWeight: '700', color: THEME.mutedLight },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   detailIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   detailTextWrap: { flex: 1 },

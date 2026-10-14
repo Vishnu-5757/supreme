@@ -1,16 +1,32 @@
 // App.tsx – Dashboard header always visible, other tabs guarded
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Modal, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Modal, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import {
   NavigationContainer,
   createNavigationContainerRef,
   useNavigation,
 } from '@react-navigation/native';
 import Constants from 'expo-constants';
+import * as SystemUI from 'expo-system-ui';
 
 // One-time env check — 'storeClient' = Expo Go, 'standalone'/'bare' = real build
 console.log('[EnvCheck] executionEnvironment:', Constants.executionEnvironment);
-import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
+
+// Android's root window background is white by default, and nothing was
+// ever setting it past the one-time splash screen — so a 'fade' transition
+// between two screens (where both are briefly semi-transparent) exposed
+// that white window underneath for a frame or two. Matching the app's own
+// maroon (every screen's own header band, not the pale body background —
+// a near-white fill would still read as "white" during a fast flash).
+SystemUI.setBackgroundColorAsync('#8E1C1C');
+// Native stack (not @react-navigation/stack's JS-rendered one): transitions
+// run through the OS's own navigation APIs — UINavigationController push/pop
+// on iOS, Fragment transitions on Android — the same primitives WhatsApp,
+// Instagram and Reddit's native screens use. This is what the JS stack was
+// only ever approximating with Animated + a hand-built card shadow, which is
+// also what was causing the white sliver glitch at the corner on back nav —
+// there's no custom-drawn shadow layer here to glitch in the first place.
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { set403Callback, setForceLogoutCallback, clearAuthTokens, loadStoredTokens } from './hooks/useAuthApi';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -28,6 +44,7 @@ import LoginScreen           from './screens/LoginScreen';
 import DashboardScreen       from './screens/DashboardScreen';
 import ServiceScreen         from './screens/ServiceScreen';
 import UsersScreen           from './screens/UsersScreen';
+import MyProgressScreen      from './screens/MyProgressScreen';
 import AddUserScreen         from './screens/AddUserScreen';
 import EditUserScreen        from './screens/EditUserScreen';
 import LeadsScreen           from './screens/LeadsScreen';
@@ -45,13 +62,20 @@ import ChangePasswordScreen  from './screens/ChangePasswordScreen';
 import SplashScreenView      from './components/SplashScreenView';
 import { AppScreenSkeleton } from './components/Skeleton';
 
+// Remove browser focus outlines on all inputs for web
+if (Platform.OS === 'web') {
+  const s = document.createElement('style');
+  s.textContent = 'input, textarea { outline: none !important; box-shadow: none !important; }';
+  document.head.appendChild(s);
+}
+
 // ── Navigation ref (used by notification deep-links outside React tree) ──
 export const navigationRef = createNavigationContainerRef();
 
 // ── Set foreground notification display behaviour once at module load ──
 setupForegroundHandler();
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
 const queryClient = new QueryClient();
 
@@ -107,11 +131,15 @@ function GuardedLeads(props: any) {
   return <LeadsScreen {...props} />;
 }
 
+// This tab is "Users" for a superuser (or anyone explicitly granted user
+// management), and "My Progress" — a personal snapshot of their own leads/
+// projects/service tickets — for everyone else, instead of a permanently
+// locked tab that led nowhere.
 function GuardedUsers(props: any) {
-  const { canAccess, loading } = usePermissionContext();
-  if (loading) return <LoadingScreen title="Users" />;
-  if (!canAccess('users')) return <NoAccessScreen moduleName="Users" />;
-  return <UsersScreen {...props} />;
+  const { canAccess, isSuperuser, loading } = usePermissionContext();
+  if (loading) return <LoadingScreen title={isSuperuser ? 'Users' : 'My Progress'} />;
+  if (isSuperuser || canAccess('users')) return <UsersScreen {...props} />;
+  return <MyProgressScreen {...props} />;
 }
 
 // ── TabGroup ──
@@ -127,7 +155,14 @@ function TabGroup() {
         // maroon root, so a fade briefly overlaps two of those and reads
         // as a solid red flash. An instant switch (standard for bottom
         // tabs, since they're independent sections, not a stack) avoids it.
-        screenOptions={{ headerShown: false, animation: 'none' }}
+        // lazy: false — mount every tab (and kick off its first data fetch)
+        // right away instead of waiting for its first visit. Previously
+        // each tab only mounted (and showed its loading skeleton) the
+        // moment you first tapped it, which read as "a loading screen
+        // between modules" even though it was really just that tab's
+        // first-ever fetch. Pre-warming them all in the background means
+        // by the time you actually switch, the data's already there.
+        screenOptions={{ headerShown: false, animation: 'none', lazy: false }}
       >
         <Tab.Screen name="Dashboard" component={DashboardScreen} />
         <Tab.Screen name="Service"   component={GuardedService} />
@@ -201,11 +236,15 @@ function MainApp() {
         headerShown: false,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
-        cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        // Fade instead of any slide — the "Material fade-through" pattern
+        // a lot of modern apps use. No horizontal motion to feel slow;
+        // just a quick native cross-fade between screens.
+        animation: 'fade',
         // Fills any gap the transition briefly exposes between screens —
-        // several screens paint their full-height root maroon, so leaving
-        // this transparent let that color flash through mid-transition.
-        cardStyle: { backgroundColor: '#F5F6F8' },
+        // matches the SystemUI root window color set above, so both the
+        // native-window layer and this JS-level layer agree, rather than
+        // one being maroon and the other a pale near-white gray.
+        contentStyle: { backgroundColor: '#8E1C1C' },
       }}
     >
       <Stack.Screen name="Splash"                component={SplashScreen} />
@@ -238,13 +277,11 @@ const appStyles = StyleSheet.create({
 });
 
 export default function App() {
-  return (
+  const app = (
     <QueryClientProvider client={queryClient}>
       <NavigationContainer
         ref={navigationRef}
         onReady={() => {
-          // Handle the case where the app was closed when the notification
-          // was tapped — navigate once the navigator is fully mounted.
           handleInitialNotification(navigationRef);
         }}
       >
@@ -252,4 +289,33 @@ export default function App() {
       </NavigationContainer>
     </QueryClientProvider>
   );
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={webShell.outer}>
+        <View style={webShell.phone}>{app}</View>
+      </View>
+    );
+  }
+  return app;
 }
+
+const webShell = StyleSheet.create({
+  outer: {
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phone: {
+    width: 390,
+    height: '100%' as any,
+    maxHeight: 844,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 8 },
+  },
+});

@@ -599,18 +599,19 @@ export default function ServiceScreen({ navigation }: any) {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fabAnim = useRef(new Animated.Value(1)).current;
   const lastScrollY = useRef(0);
+  const fabHidden = useRef(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
   }, []);
 
   const fetchServices = useCallback(
-    async (page: number, shouldAppend: boolean, search: string, statusArr: string[], levelArr: string[]) => {
+    async (page: number, shouldAppend: boolean, search: string, statusArr: string[], levelArr: string[], silent: boolean = false) => {
       if (isFetching.current) return;
       isFetching.current = true;
 
-      if (!shouldAppend) setLoading(true);
-      else setLoadingMore(true);
+      if (!shouldAppend && !silent) setLoading(true);
+      else if (shouldAppend) setLoadingMore(true);
 
       try {
         const params = new URLSearchParams();
@@ -662,7 +663,9 @@ export default function ServiceScreen({ navigation }: any) {
         mountFetchDone.current = true;
         return;
       }
-      fetchServices(1, false, searchQuery, statusFilter, levelFilter);
+      // Silent — refreshes in the background on tab refocus, without
+      // flashing the full loading skeleton over data that's already shown.
+      fetchServices(1, false, searchQuery, statusFilter, levelFilter, true);
       refreshBadgeFromServer();
     }, []),
   );
@@ -735,11 +738,17 @@ export default function ServiceScreen({ navigation }: any) {
     const dy = y - lastScrollY.current;
     lastScrollY.current = y;
     if (dy > 8 && y > 60) {
-      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+      if (!fabHidden.current) {
+        fabHidden.current = true;
+        Animated.timing(fabAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+      }
     } else if (dy < -8) {
-      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      if (fabHidden.current) {
+        fabHidden.current = false;
+        Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      }
     }
-  }, []);
+  }, [fabAnim]);
 
   const navigateToAdd = () => {
     navigation.navigate('AddEditService', {
@@ -837,6 +846,10 @@ export default function ServiceScreen({ navigation }: any) {
                 <AccountMenu navigation={navigation} />
               </View>
             </View>
+          </View>
+
+          <View style={styles.bodyWrap}>
+          <View style={styles.searchBarOuter}>
             <View style={styles.searchBar}>
               <MaterialCommunityIcons name="magnify" size={16} color={THEME.muted} />
               <TextInput
@@ -853,8 +866,6 @@ export default function ServiceScreen({ navigation }: any) {
               )}
             </View>
           </View>
-
-          <View style={styles.bodyWrap}>
           <View style={styles.filterStrip}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               <TouchableOpacity
@@ -1049,9 +1060,8 @@ const styles = StyleSheet.create({
   bodyWrap: {
     flex: 1,
     backgroundColor: THEME.bg,
-    marginTop: -16,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
   },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
@@ -1059,7 +1069,7 @@ const styles = StyleSheet.create({
 
   headerWrap: {
     backgroundColor: THEME.primary,
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 26,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18,
   },
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { flex: 1, paddingRight: 10 },
@@ -1078,9 +1088,11 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
 
+  searchBarOuter: { paddingHorizontal: 14, paddingTop: 14 },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#FFF', borderRadius: 10, paddingHorizontal: 12, height: 38, marginTop: 12,
+    backgroundColor: '#FFF', borderRadius: 10, paddingHorizontal: 12, height: 38,
+    borderWidth: 1, borderColor: THEME.border,
   },
   searchInput: { flex: 1, fontSize: 13, color: THEME.text },
 

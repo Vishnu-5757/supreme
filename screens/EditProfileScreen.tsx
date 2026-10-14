@@ -115,16 +115,13 @@ export default function EditProfileScreen({ navigation, route }: any) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={s.topBarCenter}>
-            <View style={s.topIconCircle}>
-              <MaterialCommunityIcons name="account-edit-outline" size={24} color={P} />
-            </View>
-            <Text style={s.topTitle}>Edit Profile</Text>
-            <Text style={s.topSub}>Change your username</Text>
+            <Text style={s.topTitle} numberOfLines={1}>Edit Profile</Text>
+            <Text style={s.topSub} numberOfLines={1}>Change your username</Text>
           </View>
           <View style={{ width: 34 }} />
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#F4F5F7', marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#F4F5F7', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Avatar preview */}
@@ -181,10 +178,10 @@ const s = StyleSheet.create({
   topBar: {
     backgroundColor: P,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18,
   },
   backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topIconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub:   { fontSize: 11, color: 'rgba(255,255,255,0.65)' },

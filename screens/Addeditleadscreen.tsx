@@ -1879,13 +1879,10 @@ export default function AddEditLeadScreen({ navigation, route }: Props) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={fs.topBarCenter}>
-            <View style={fs.topAvatar}>
-              <Text style={fs.topAvatarText}>{avatarLetter}</Text>
-            </View>
-            <Text style={fs.topTitle}>
+            <Text style={fs.topTitle} numberOfLines={1}>
               {isEdit ? 'Edit Lead' : 'New Lead'}
             </Text>
-            <Text style={fs.topSub}>
+            <Text style={fs.topSub} numberOfLines={1}>
               {isEdit
                 ? `Editing: ${existingLead?.customer_name || 'Lead'}`
                 : 'Fill in the details below'}
@@ -1906,7 +1903,7 @@ export default function AddEditLeadScreen({ navigation, route }: Props) {
         ) : null}
 
         <KeyboardAvoidingView
-  style={[fs.keyboardWrap, { backgroundColor: T.bg, marginTop: -24 ,paddingTop: 29}]}
+  style={[fs.keyboardWrap, { backgroundColor: T.bg, paddingTop: 16 }]}
   behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 >
           <ScrollView
@@ -2498,8 +2495,8 @@ const fs = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 34,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   backBtn: {
     width: 34,
@@ -2509,7 +2506,7 @@ const fs = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topAvatar: {
     width: 52,
     height: 52,
@@ -2538,7 +2535,7 @@ const fs = StyleSheet.create({
     borderRadius: 8,
   },
   errorBannerText: { fontSize: 12, color: T.danger, flex: 1 },
-  keyboardWrap: { flex: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  keyboardWrap: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 16,

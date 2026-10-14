@@ -462,9 +462,6 @@ export default function ManagePaymentsScreen({ route, navigation }: any) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={styles.topBarCenter}>
-            <View style={styles.topAvatar}>
-              <Text style={styles.topAvatarText}>{avatarLetter}</Text>
-            </View>
             <Text style={styles.topTitle} numberOfLines={1}>Payments</Text>
             <Text style={styles.topSub} numberOfLines={1}>{project.customer_name}</Text>
           </View>
@@ -564,14 +561,14 @@ export default function ManagePaymentsScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  topBar: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 10 },
+  topBar: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18, gap: 10 },
   backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6 },
   topAvatarText: { fontSize: 20, fontWeight: '800', color: THEME.primary },
   topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub: { fontSize: 11, color: 'rgba(255,255,255,0.7)' },
-  bodyWrap: { flex: 1, backgroundColor: THEME.bg, marginTop: -28, paddingTop: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  bodyWrap: { flex: 1, backgroundColor: THEME.bg, paddingTop: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
   scrollContent: { padding: 16, paddingBottom: 24 },
   summaryCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: THEME.border, marginBottom: 18 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },

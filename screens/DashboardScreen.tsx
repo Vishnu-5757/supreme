@@ -3041,8 +3041,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 22,
-    paddingBottom: 36,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
 
   headerLeft: {
@@ -3124,9 +3124,8 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
     backgroundColor: THEME.bg,
-    marginTop: -12,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
   },
 

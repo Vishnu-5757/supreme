@@ -20,7 +20,6 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuthApi } from '../hooks/useAuthApi';
 import { usePermissions } from '../hooks/usePermissions';
-import { userCache } from '../hooks/userCache';
 import { API_BASE_URL } from '../config';
 
 const THEME = {
@@ -43,6 +42,14 @@ const THEME = {
   infoLight: '#EFF6FF',
 };
 
+interface SubStepDef {
+  id: number;
+  name: string;
+  doneField: string;
+  dateField: string;
+  editable: boolean;
+}
+
 interface StepDef {
   id: number;
   slug: string | null;
@@ -55,6 +62,7 @@ interface StepDef {
   doneField: string;
   skippedField: string;
   editable: boolean;
+  subSteps: SubStepDef[];
 }
 
 // Server-returned shape of one entry in the `steps` array from
@@ -63,6 +71,14 @@ interface StepDef {
 // category/payment/branch-hide and already in the correct order. This
 // replaces the old hardcoded 9-step list, so a custom step added from the
 // web Milestone Settings screen shows up here automatically.
+interface ServerSubStep {
+  id: number;
+  name: string;
+  date: string | null;
+  done: boolean;
+  editable: boolean;
+}
+
 interface ServerStep {
   id: number;
   slug: string | null;
@@ -76,6 +92,7 @@ interface ServerStep {
   done: boolean;
   skipped: boolean;
   editable: boolean;
+  sub_steps: ServerSubStep[];
 }
 
 // Nicer icon/color/description for the 9 known built-in steps than the
@@ -109,6 +126,13 @@ const buildStepDef = (s: ServerStep): StepDef => {
     doneField: `entry_${s.id}_done`,
     skippedField: `entry_${s.id}_skipped`,
     editable: s.editable,
+    subSteps: (s.sub_steps || []).map(sub => ({
+      id: sub.id,
+      name: sub.name,
+      doneField: `subentry_${sub.id}_done`,
+      dateField: `subentry_${sub.id}_date`,
+      editable: sub.editable,
+    })),
   };
 };
 
@@ -119,6 +143,10 @@ const buildTrackingDataFromSteps = (stepsArr: ServerStep[]) => {
     data[`entry_${s.id}_remarks`] = s.remarks || '';
     data[`entry_${s.id}_done`] = !!s.done;
     data[`entry_${s.id}_skipped`] = !!s.skipped;
+    (s.sub_steps || []).forEach(sub => {
+      data[`subentry_${sub.id}_done`] = !!sub.done;
+      data[`subentry_${sub.id}_date`] = sub.date || '';
+    });
   });
   return data;
 };
@@ -218,20 +246,31 @@ const fmStyles = StyleSheet.create({
 });
 
 // ─── StepEditModal ───────────────────────────────────────────────────
-const StepEditModal = ({ visible, step, trackingData, onClose, onSave, onSkip, saving }: any) => {
+const StepEditModal = ({ visible, step, trackingData, blockerLabel, onClose, onSave, onSkip, onUpdateSub, onShowError, saving }: any) => {
   const dateValue = trackingData[step?.dateField] || '';
   const remarksValue = trackingData[step?.remarksField] || '';
   const isSkipped = !!trackingData[step?.skippedField];
   const isDone = !!trackingData[step?.doneField];
+  // Whether THIS user can edit the step's own Date/Remarks/Skip — separate
+  // from the checklist, which is gated per sub-item instead. A user scoped
+  // to only specific milestones can open a step's modal (canSave is a
+  // blanket screen-level gate) without holding access to that particular
+  // step; without this, the fields below would stay fully interactive and
+  // only fail with a confusing server error on save.
+  const parentEditable = !!step?.editable;
   const [date, setDate] = useState(dateValue);
   const [remarks, setRemarks] = useState(remarksValue);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [openSubPickerId, setOpenSubPickerId] = useState<number | null>(null);
 
   useEffect(() => {
     if (visible) {
       setDate(dateValue);
       setRemarks(remarksValue);
       setShowDatePicker(false);
+      setShowSkipConfirm(false);
+      setOpenSubPickerId(null);
     }
   }, [visible, dateValue, remarksValue]);
 
@@ -245,11 +284,59 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, onSkip, s
   const handleSave = () => {
     // Marking a milestone Done requires a date — matches the server's own
     // rule. Remarks alone no longer silently ticks it off; use Skip instead
-    // when there's nothing to date yet.
-    onSave({ date, remarks, autoTick: !!date?.trim() });
+    // when there's nothing to date yet. Both checks run BEFORE calling
+    // onSave (same as handleSkip does for the in-order rule) so tapping
+    // "Update Milestone" gives an immediate answer instead of silently
+    // closing and only failing later when Sync Changes is pressed.
+    if (!date?.trim()) {
+      onShowError('Date Required', `Please select a date before saving '${step.label}'.`);
+      return;
+    }
+    if (blockerLabel) {
+      onShowError('Complete Previous Step', `Complete or skip '${blockerLabel}' before completing '${step.label}'.`);
+      return;
+    }
+    onSave({ date, remarks, autoTick: true });
   };
 
-  const handleSkip = () => onSkip(remarks);
+  // Checklist items go strictly in order, same as the steps themselves: an
+  // item can only be ticked once the one before it is, and only unticked once
+  // no later item is still ticked. The server re-checks regardless.
+  const toggleSubDone = (sub: SubStepDef, idx: number) => {
+    const subs: SubStepDef[] = step.subSteps;
+    const isOn = !!trackingData[sub.doneField];
+    if (!isOn) {
+      const prev = subs[idx - 1];
+      if (prev && !trackingData[prev.doneField]) {
+        onShowError('Complete Previous Item', `Complete '${prev.name}' before completing '${sub.name}'.`);
+        return;
+      }
+    } else {
+      const later = subs.slice(idx + 1).find(s => !!trackingData[s.doneField]);
+      if (later) {
+        onShowError('Item Already Completed', `'${later.name}' is already completed — untick it before unticking '${sub.name}'.`);
+        return;
+      }
+    }
+    onUpdateSub(sub, { done: !isOn });
+  };
+
+  const handleSkip = () => {
+    // Check the in-order rule BEFORE even offering the confirmation — no
+    // point asking "are you sure" for a skip the server will reject anyway.
+    if (blockerLabel) {
+      onShowError('Complete Previous Step', `Complete or skip '${blockerLabel}' before skipping '${step.label}'.`);
+      return;
+    }
+    setShowSkipConfirm(true);
+  };
+
+  const confirmSkip = () => {
+    setShowSkipConfirm(false);
+    onSkip(remarks);
+  };
+
+  const subDatePickerValue = (sub: SubStepDef) => trackingData[sub.dateField] || '';
 
   if (!step) return null;
 
@@ -277,12 +364,16 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, onSkip, s
             <View style={styles.modalFormBody}>
               <View style={styles.modalField}>
                 <Text style={styles.fieldLabel}>Date Cleared</Text>
-                <TouchableOpacity style={styles.dateInputWrap} onPress={() => setShowDatePicker(true)}>
+                <TouchableOpacity
+                  style={[styles.dateInputWrap, !parentEditable && { opacity: 0.5 }]}
+                  onPress={() => parentEditable && setShowDatePicker(true)}
+                  disabled={!parentEditable}
+                >
                   <MaterialCommunityIcons name="calendar-range" size={18} color={THEME.textSecondary} />
                   <Text style={[styles.dateText, !date && { color: THEME.muted }]}>
                     {date ? formatDateDisplay(date) : 'Choose date'}
                   </Text>
-                  {date && (
+                  {date && parentEditable && (
                     <TouchableOpacity onPress={() => setDate('')} style={{ padding: 2 }}>
                       <MaterialCommunityIcons name="close-circle" size={16} color={THEME.textSecondary} />
                     </TouchableOpacity>
@@ -295,34 +386,145 @@ const StepEditModal = ({ visible, step, trackingData, onClose, onSave, onSkip, s
               <View style={styles.modalField}>
                 <Text style={styles.fieldLabel}>Tracking Remarks / Comments</Text>
                 <TextInput
-                  style={styles.remarksInput}
+                  style={[styles.remarksInput, !parentEditable && { opacity: 0.5 }]}
                   placeholder="Provide tracking log info here..."
                   placeholderTextColor={THEME.muted}
                   value={remarks}
                   onChangeText={setRemarks}
+                  editable={parentEditable}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
               </View>
+              {!parentEditable && (
+                <View style={styles.viewOnlyNote}>
+                  <MaterialCommunityIcons name="eye-outline" size={14} color={THEME.muted} />
+                  <Text style={styles.viewOnlyText}>You don't have permission to edit this milestone</Text>
+                </View>
+              )}
+              {step.subSteps.length > 0 && (
+                <View style={styles.modalField}>
+                  <Text style={styles.fieldLabel}>Checklist</Text>
+                  <View style={styles.subStepList}>
+                    {step.subSteps.map((sub: SubStepDef, subIdx: number) => {
+                      const subDone = !!trackingData[sub.doneField];
+                      const subDate = subDatePickerValue(sub);
+                      // Gated by the sub-item's OWN permission, not the parent
+                      // step's — a user can hold access to one specific
+                      // sub-item without holding access to the parent step
+                      // itself (and vice versa), same as the server enforces.
+                      // Locked either way while the parent is Skipped.
+                      const locked = isSkipped || !sub.editable;
+                      return (
+                        <View key={sub.id} style={[styles.subStepRow, subDone && styles.subStepRowDone, locked && { opacity: 0.5 }]}>
+                          <TouchableOpacity
+                            style={styles.subStepCheckbox}
+                            activeOpacity={locked ? 1 : 0.7}
+                            disabled={locked}
+                            onPress={() => toggleSubDone(sub, subIdx)}
+                          >
+                            <MaterialCommunityIcons
+                              name={subDone ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                              size={22}
+                              color={subDone ? THEME.success : THEME.muted}
+                            />
+                          </TouchableOpacity>
+
+                          <View style={styles.subStepBody}>
+                            <Text style={[styles.subStepText, subDone && styles.subStepTextDone]} numberOfLines={1}>
+                              {sub.name}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.subDateRow}
+                              activeOpacity={locked ? 1 : 0.6}
+                              disabled={locked}
+                              onPress={() => setOpenSubPickerId(sub.id)}
+                            >
+                              <MaterialCommunityIcons name="calendar-range" size={12} color={subDate ? THEME.textSecondary : THEME.muted} />
+                              <Text style={[styles.subDateText, !subDate && { color: THEME.muted, fontStyle: 'italic' }]}>
+                                {subDate ? formatDateDisplay(subDate) : 'Tap to set a date'}
+                              </Text>
+                              {subDate && !locked && (
+                                <TouchableOpacity
+                                  onPress={() => onUpdateSub(sub, { date: '' })}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <MaterialCommunityIcons name="close-circle" size={14} color={THEME.muted} />
+                                </TouchableOpacity>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+
+                          {subDone && (
+                            <View style={styles.subDoneChip}>
+                              <MaterialCommunityIcons name="check" size={10} color={THEME.success} />
+                              <Text style={styles.subDoneChipText}>Done</Text>
+                            </View>
+                          )}
+
+                          {openSubPickerId === sub.id && (
+                            <DateTimePicker
+                              value={subDate ? new Date(subDate) : new Date()}
+                              mode="date"
+                              display="default"
+                              onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
+                                if (Platform.OS === 'android') setOpenSubPickerId(null);
+                                if (event.type === 'set' && selectedDate) {
+                                  onUpdateSub(sub, { date: selectedDate.toISOString().split('T')[0] });
+                                }
+                              }}
+                            />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
-            {!isDone && (
+            {!isDone && !isSkipped && parentEditable && (
               <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} disabled={saving} activeOpacity={0.8}>
                 <MaterialCommunityIcons name="debug-step-over" size={15} color={THEME.warning} />
-                <Text style={styles.skipBtnText}>Skip this milestone (requires a reason above)</Text>
+                <Text style={styles.skipBtnText}>Skip this milestone</Text>
               </TouchableOpacity>
             )}
             <View style={styles.modalActionsRow}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
                 <Text style={styles.cancelBtnText}>Dismiss</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving}>
-                {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.saveBtnText}>Update Milestone</Text>}
-              </TouchableOpacity>
+              {parentEditable && (
+                <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving}>
+                  {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.saveBtnText}>Update Milestone</Text>}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
       </View>
+
+      <Modal visible={showSkipConfirm} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowSkipConfirm(false)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconBg}>
+              <MaterialCommunityIcons name="debug-step-over" size={26} color={THEME.warning} />
+            </View>
+            <Text style={styles.confirmTitle}>Skip '{step.label}'?</Text>
+            <Text style={styles.confirmMessage}>
+              This marks the step as skipped so you can move on to the next one. You can still come back and
+              complete it properly later — but its checklist will be locked while it stays skipped.
+            </Text>
+            <View style={styles.confirmActionsRow}>
+              <TouchableOpacity style={styles.confirmCancelBtn} onPress={() => setShowSkipConfirm(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmSkipBtn} onPress={confirmSkip}>
+                <Text style={styles.confirmSkipText}>Yes, Skip</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -337,6 +539,9 @@ const TimelineStepCard = ({ step, trackingData, onToggleDone, onPress }: any) =>
   const nodeStyle = isDone ? styles.timelineNodeDone : isSkipped ? styles.timelineNodeSkipped : styles.timelineNodePending;
   const lineStyle = isDone ? styles.timelineLineDone : isSkipped ? styles.timelineLineSkipped : null;
   const nodeIcon = isDone ? 'check' : isSkipped ? 'debug-step-over' : step.icon;
+
+  const subTotal = step.subSteps?.length ?? 0;
+  const subDoneCount = subTotal ? step.subSteps.filter((s: SubStepDef) => !!trackingData[s.doneField]).length : 0;
 
   return (
     <View style={styles.timelineRowWrap}>
@@ -372,6 +577,44 @@ const TimelineStepCard = ({ step, trackingData, onToggleDone, onPress }: any) =>
             )}
           </View>
         </View>
+
+        {subTotal > 0 && (
+          <View style={styles.timelineSubSection}>
+            <View style={styles.timelineSubHeaderRow}>
+              <MaterialCommunityIcons name="format-list-checks" size={12} color={THEME.textSecondary} />
+              <Text style={styles.timelineSubHeaderText}>Checklist</Text>
+              <Text style={[styles.timelineSubHeaderCount, subDoneCount === subTotal && { color: THEME.success }]}>
+                {subDoneCount}/{subTotal}
+              </Text>
+            </View>
+            <View style={styles.timelineSubTrack}>
+              <View style={[styles.timelineSubFill, { width: `${(subDoneCount / subTotal) * 100}%` }]} />
+            </View>
+            <View style={styles.timelineSubList}>
+              {step.subSteps.map((sub: SubStepDef) => {
+                const subDone = !!trackingData[sub.doneField];
+                const subDate = trackingData[sub.dateField];
+                return (
+                  <View key={sub.id} style={styles.timelineSubRow}>
+                    <MaterialCommunityIcons
+                      name={subDone ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                      size={14}
+                      color={subDone ? THEME.success : THEME.muted}
+                    />
+                    <Text style={[styles.timelineSubRowText, subDone && styles.timelineSubRowTextDone]} numberOfLines={1}>
+                      {sub.name}
+                    </Text>
+                    {subDate ? (
+                      <Text style={styles.timelineSubRowDate}>{formatDateDisplay(subDate)}</Text>
+                    ) : (
+                      <Text style={styles.timelineSubRowDateMuted}>No date</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -409,22 +652,115 @@ const SectionLabel = ({ icon, title }: { icon: string; title: string }) => (
   </View>
 );
 
+// ─── HistoryModal ───────────────────────────────────────────────────
+// "Who updated what, and when" — mirrors the web tracking page's Update
+// History panel. Same /project/<id>/tracking-api/log/ data shape as web's
+// /project/<id>/tracking/log/, so the two stay in sync automatically.
+interface HistoryChange { label: string; old: string | null; new: string | null; }
+interface HistoryRow {
+  id: number;
+  step: string | null;
+  action: string;
+  performed_at: string | null;
+  performed_by: string;
+  changes: HistoryChange[];
+}
+
+function formatHistoryWhen(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+const HistoryModal = ({
+  visible, onClose, loading, logs,
+}: { visible: boolean; onClose: () => void; loading: boolean; logs: HistoryRow[]; }) => (
+  <Modal visible={visible} transparent animationType="slide" statusBarTranslucent presentationStyle="overFullScreen" onRequestClose={onClose}>
+    <View style={styles.modalOverlay}>
+      <View style={[styles.modalCard, styles.historyModalCard]}>
+        <View style={styles.modalIndicatorBar} />
+        <View style={styles.modalHeaderRow}>
+          <View style={[styles.modalIconBox, { backgroundColor: '#F3F4F6' }]}>
+            <MaterialCommunityIcons name="history" size={22} color={THEME.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.modalTitle}>Update History</Text>
+            <Text style={styles.modalDesc} numberOfLines={1}>Who changed what, and when</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+            <MaterialCommunityIcons name="close" size={20} color={THEME.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={THEME.primary} />
+          </View>
+        ) : logs.length === 0 ? (
+          <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+            <Text style={{ color: THEME.muted, fontSize: 13 }}>No updates recorded yet.</Text>
+          </View>
+        ) : (
+          <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+            {logs.map((row) => (
+              <View key={row.id} style={styles.historyRow}>
+                <View style={styles.historyRowHead}>
+                  <Text style={styles.historyStep} numberOfLines={2}>{row.step || 'Milestone'}</Text>
+                  <Text style={styles.historyWhen}>{formatHistoryWhen(row.performed_at)}</Text>
+                </View>
+                <Text style={styles.historyBy}>by <Text style={{ fontWeight: '700', color: THEME.text }}>{row.performed_by}</Text></Text>
+                {row.changes.map((c, i) => (
+                  <Text key={i} style={styles.historyChangeLine}>
+                    <Text style={{ color: THEME.textSecondary }}>{c.label}: </Text>
+                    {c.old != null && c.old !== '' ? (
+                      <>
+                        <Text style={{ color: THEME.danger, textDecorationLine: 'line-through' }}>{c.old}</Text>
+                        <Text> → </Text>
+                      </>
+                    ) : null}
+                    <Text style={{ color: THEME.success, fontWeight: '600' }}>{c.new}</Text>
+                  </Text>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+    </View>
+  </Modal>
+);
+
 // ─── Main Screen ────────────────────────────────────────────────────
 export default function ProjectTrackingScreen({ route, navigation }: any) {
   const { project } = route.params;
   const { apiRequest } = useAuthApi();
   const insets = useSafeAreaInsets();
   const { hasPermission, isSuperuser } = usePermissions();
-  const _trackAppPerms: string[] = userCache.current?.app_permissions ?? [];
-  const canSave = isSuperuser || (_trackAppPerms.includes('project') && hasPermission('project.change_projectmilestone'));
+  // Mirrors exactly what the server itself checks before accepting a save
+  // (project_tracking_api's POST handler). Previously this was additionally
+  // gated on userCache.current.app_permissions, a snapshot taken only at
+  // login and never refreshed — a permission change made after the user's
+  // last login would silently keep this false (View Only) even though
+  // hasPermission() itself had already picked up the change (it polls and
+  // refreshes on app foreground). Dropped that stale check entirely.
+  const canSave = isSuperuser || hasPermission('project.change_projectmilestone');
 
   const [trackingData, setTrackingData] = useState<Record<string, any>>({});
   const [category, setCategory] = useState<'RES' | 'COM'>('RES');
   const [visibleSteps, setVisibleSteps] = useState<StepDef[]>([]);
   const [localChanges, setLocalChanges] = useState<Record<string, any>>({});
+  // Snapshots of localChanges before each staged edit, so the banner's Undo
+  // can step back one edit at a time — only ever holds not-yet-synced state.
+  const [changeHistory, setChangeHistory] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editStep, setEditStep] = useState<StepDef | null>(null);
+
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLogs, setHistoryLogs] = useState<HistoryRow[]>([]);
+  const historyLoadedRef = useRef(false);
 
   const [feedbackModal, setFeedbackModal] = useState({
     visible: false,
@@ -453,6 +789,23 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
     });
   }, [navigation, route]);
 
+  const openHistory = useCallback(async () => {
+    setHistoryVisible(true);
+    if (historyLoadedRef.current) return;
+    setHistoryLoading(true);
+    try {
+      const res = await apiRequest(`${API_BASE_URL}/project/${project.id}/tracking-api/log/`);
+      if (!res.ok) throw new Error('Failed to load history');
+      const json = await res.json();
+      setHistoryLogs(json.logs || []);
+      historyLoadedRef.current = true;
+    } catch {
+      showFeedback('error', 'Error', 'Could not load update history', false);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [apiRequest, project.id, showFeedback]);
+
   const fetchTracking = useCallback(async (silent = false) => {
     // `silent` skips the full-screen loading state — used by pull-to-refresh,
     // which shows its own inline spinner instead of replacing the whole screen.
@@ -466,6 +819,7 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
       setTrackingData(buildTrackingDataFromSteps(stepsArr));
       setCategory(json.category || 'RES');
       setLocalChanges({});
+      setChangeHistory([]);
     } catch {
       showFeedback('error', 'Error', 'Could not load tracking data', false);
     } finally {
@@ -492,6 +846,20 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
 
   const effectiveData = useMemo(() => ({ ...trackingData, ...localChanges }), [trackingData, localChanges]);
   const hasLocalChanges = Object.keys(localChanges).length > 0;
+
+  const stageChanges = useCallback(
+    (build: (prev: Record<string, any>) => Record<string, any>) => {
+      setChangeHistory(h => [...h.slice(-49), localChanges]);
+      setLocalChanges(build(localChanges));
+    },
+    [localChanges],
+  );
+
+  const undoLastChange = useCallback(() => {
+    if (!changeHistory.length) return;
+    setLocalChanges(changeHistory[changeHistory.length - 1]);
+    setChangeHistory(changeHistory.slice(0, -1));
+  }, [changeHistory]);
 
   // A step counts as "out of the way" (done OR skipped) for order-checking
   // purposes — mirrors the server's rule, which applies to everyone with no
@@ -536,6 +904,7 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
         }
         setCategory(json.category || category);
         setLocalChanges({});
+        setChangeHistory([]);
         showFeedback('success', 'Saved Successfully', 'All workflow updates pushed online', true);
       } else {
         showFeedback('error', 'Error', json.error || 'Unable to store updates', false);
@@ -564,7 +933,18 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
       if (!effectiveData[step.dateField]) changes[step.dateField] = todayISO();
       changes[step.skippedField] = false;
     }
-    setLocalChanges(prev => ({ ...prev, ...changes }));
+    stageChanges(prev => ({ ...prev, ...changes }));
+  };
+
+  // Sub-step checklist items — queued into the same batched localChanges as
+  // everything else on this screen, pushed together on the next Sync.
+  // done/date are independent fields, same as the server and web: checking
+  // the box never touches the date, and picking a date never touches done.
+  const updateSubStep = (sub: SubStepDef, patch: { done?: boolean; date?: string }) => {
+    const changes: Record<string, any> = {};
+    if (patch.done !== undefined) changes[sub.doneField] = patch.done;
+    if (patch.date !== undefined) changes[sub.dateField] = patch.date;
+    stageChanges(prev => ({ ...prev, ...changes }));
   };
 
   const handleModalSave = useCallback(
@@ -585,17 +965,22 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
         [editStep.doneField]: autoTick ? true : effectiveData[editStep.doneField] || false,
       };
       if (autoTick) changes[editStep.skippedField] = false;
-      setLocalChanges(prev => ({ ...prev, ...changes }));
+      stageChanges(prev => ({ ...prev, ...changes }));
       setEditStep(null);
     },
-    [editStep, effectiveData, getBlockingStep, showFeedback],
+    [editStep, effectiveData, getBlockingStep, showFeedback, stageChanges],
   );
 
   const handleModalSkip = useCallback(
     (remarks: string) => {
       if (!editStep) return;
-      if (!remarks.trim()) {
-        showFeedback('error', 'Reason Required', `Add a reason in Remarks before skipping '${editStep.label}'.`, false);
+      // No remarks required to skip anymore (confirmed via dialog instead,
+      // in the modal itself) — matches the same change made on web. The
+      // in-order check is the modal's job before it even shows that dialog;
+      // this is just a defensive backstop, same pattern as handleModalSave.
+      const blocker = getBlockingStep(editStep);
+      if (blocker) {
+        showFeedback('error', 'Complete Previous Step', `Complete or skip '${blocker.label}' before skipping '${editStep.label}'.`, false);
         return;
       }
       const changes: Record<string, any> = {
@@ -604,10 +989,27 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
         [editStep.dateField]: '',
         [editStep.remarksField]: remarks,
       };
-      setLocalChanges(prev => ({ ...prev, ...changes }));
+
+      let discardedSubEdits = false;
+      stageChanges(prev => {
+        const next = { ...prev, ...changes };
+        // Skipping locks this step's checklist — drop any staged-but-not-
+        // yet-synced sub-item edits for it so they can't collide with the
+        // skip in the same sync request (the server would reject the whole
+        // batch: an edit to a checklist that's simultaneously being locked).
+        editStep.subSteps.forEach((sub: SubStepDef) => {
+          if (sub.doneField in next || sub.dateField in next) discardedSubEdits = true;
+          delete next[sub.doneField];
+          delete next[sub.dateField];
+        });
+        return next;
+      });
       setEditStep(null);
+      if (discardedSubEdits) {
+        showFeedback('info', 'Checklist Locked', `Unsynced checklist changes for '${editStep.label}' were discarded, since its checklist is now locked while skipped.`, false);
+      }
     },
-    [editStep, showFeedback],
+    [editStep, getBlockingStep, showFeedback, stageChanges],
   );
 
   const avatarLetter = project.customer_name?.[0]?.toUpperCase() || 'P';
@@ -622,11 +1024,8 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
               <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
             </TouchableOpacity>
             <View style={styles.topBarCenter}>
-              <View style={styles.topIconCircle}>
-                <MaterialCommunityIcons name="chart-timeline-variant" size={22} color={THEME.primary} />
-              </View>
-              <Text style={styles.topTitle}>Loading Pipeline</Text>
-              <Text style={styles.topSub}>Please wait...</Text>
+              <Text style={styles.topTitle} numberOfLines={1}>Loading Pipeline</Text>
+              <Text style={styles.topSub} numberOfLines={1}>Please wait...</Text>
             </View>
             <View style={{ width: 34 }} />
           </View>
@@ -656,12 +1055,14 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={styles.topBarCenter}>
-            <View style={styles.topAvatar}>
-              <Text style={styles.topAvatarText}>{avatarLetter}</Text>
-            </View>
             <Text style={styles.topTitle} numberOfLines={1}>{project.customer_name}</Text>
-            <Text style={styles.topSub}>ID: {project.id} · {project.mobile}</Text>
+            <Text style={styles.topSub} numberOfLines={1}>ID: {project.id} · {project.mobile}</Text>
           </View>
+          {isSuperuser && (
+            <TouchableOpacity style={styles.backBtn} onPress={openHistory}>
+              <MaterialCommunityIcons name="history" size={18} color="#FFF" />
+            </TouchableOpacity>
+          )}
           {canSave ? (
             <TouchableOpacity
               style={[styles.headerSyncBtn, (!hasLocalChanges || saving) && styles.headerSyncBtnDisabled]}
@@ -679,6 +1080,13 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
           )}
         </View>
 
+        <HistoryModal
+          visible={historyVisible}
+          onClose={() => setHistoryVisible(false)}
+          loading={historyLoading}
+          logs={historyLogs}
+        />
+
         <View style={styles.bodyWrap}>
           {canSave && hasLocalChanges && (
             <View style={styles.alertTape}>
@@ -686,6 +1094,12 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
                 <MaterialCommunityIcons name="database-edit-outline" size={14} color={THEME.warning} />
               </View>
               <Text style={styles.alertTapeText}>You have unsaved changes — tap sync to push them.</Text>
+              {changeHistory.length > 0 && (
+                <TouchableOpacity style={styles.alertTapeUndoBtn} onPress={undoLastChange} activeOpacity={0.8} disabled={saving}>
+                  <MaterialCommunityIcons name="undo-variant" size={14} color="#78350F" />
+                  <Text style={styles.alertTapeUndoText}>Undo</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -728,7 +1142,7 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
                   <>
                     <MaterialCommunityIcons name="cloud-sync" size={16} color={hasLocalChanges ? '#FFF' : THEME.muted} />
                     <Text style={[styles.footerSyncText, !hasLocalChanges && { color: THEME.muted }]}>
-                      {hasLocalChanges ? 'Sync Changes' : 'All Changes Saved'}
+                      {hasLocalChanges ? 'Sync Changes' : 'Update'}
                     </Text>
                   </>
                 )}
@@ -747,9 +1161,12 @@ export default function ProjectTrackingScreen({ route, navigation }: any) {
         visible={!!editStep}
         step={editStep}
         trackingData={effectiveData}
+        blockerLabel={editStep ? getBlockingStep(editStep)?.label ?? null : null}
         onClose={() => setEditStep(null)}
         onSave={handleModalSave}
         onSkip={handleModalSkip}
+        onUpdateSub={updateSubStep}
+        onShowError={(title: string, message: string) => showFeedback('error', title, message, false)}
         saving={false}
       />
     </View>
@@ -764,8 +1181,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
+    paddingTop: 14,
+    paddingBottom: 18,
     gap: 10,
   },
   backBtn: {
@@ -773,7 +1190,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 3 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topAvatar: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center',
@@ -793,7 +1210,7 @@ const styles = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4,
   },
   headerSyncBtnDisabled: { backgroundColor: 'rgba(53, 17, 17, 0.2)', elevation: 0 },
-  bodyWrap: { flex: 1, backgroundColor: THEME.bg, marginTop: -28, paddingTop: 33, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  bodyWrap: { flex: 1, backgroundColor: THEME.bg, paddingTop: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
   alertTape: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: THEME.warningLight,
@@ -811,6 +1228,13 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: 'rgba(217,119,6,0.25)',
   },
+  alertTapeUndoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#FFF', borderRadius: 10,
+    paddingVertical: 6, paddingHorizontal: 10,
+    borderWidth: 1, borderColor: 'rgba(217,119,6,0.35)',
+  },
+  alertTapeUndoText: { fontSize: 11.5, fontWeight: '700', color: '#78350F' },
   alertTapeText: { flex: 1, fontSize: 11.5, fontWeight: '600', color: '#78350F', lineHeight: 16 },
   sectionRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -887,6 +1311,18 @@ const styles = StyleSheet.create({
   timelineMetaText: { fontSize: 10.5, fontWeight: '700' },
   timelineMetaTextDark: { color: THEME.textSecondary },
   timelineMetaTextMuted: { color: THEME.muted },
+  timelineSubSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F0F1F3' },
+  timelineSubHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+  timelineSubHeaderText: { flex: 1, fontSize: 10.5, fontWeight: '800', color: THEME.textSecondary, letterSpacing: 0.2, textTransform: 'uppercase' },
+  timelineSubHeaderCount: { fontSize: 10.5, fontWeight: '800', color: THEME.textSecondary },
+  timelineSubTrack: { height: 3, borderRadius: 2, backgroundColor: '#EEF0F2', overflow: 'hidden', marginBottom: 8 },
+  timelineSubFill: { height: '100%', borderRadius: 2, backgroundColor: THEME.success },
+  timelineSubList: { gap: 6 },
+  timelineSubRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  timelineSubRowText: { flex: 1, fontSize: 11.5, fontWeight: '600', color: THEME.text, minWidth: 0 },
+  timelineSubRowTextDone: { color: THEME.success },
+  timelineSubRowDate: { fontSize: 10, fontWeight: '700', color: THEME.textSecondary, flexShrink: 0 },
+  timelineSubRowDateMuted: { fontSize: 10, fontWeight: '600', color: THEME.muted, flexShrink: 0 },
   fixedFooter: {
     paddingHorizontal: 16, paddingTop: 8,
     backgroundColor: THEME.bg, borderTopWidth: 1, borderTopColor: '#E9EAEC',
@@ -932,6 +1368,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 13,
     color: THEME.text, backgroundColor: '#F9FAFB', minHeight: 64,
   },
+  subStepList: { gap: 8 },
+  subStepRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#F9FAFB', borderRadius: 10,
+    borderWidth: 1, borderColor: '#F0F1F3',
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  subStepRowDone: { backgroundColor: THEME.successLight, borderColor: 'rgba(25,135,84,0.18)' },
+  subStepCheckbox: { padding: 2 },
+  subStepBody: { flex: 1, minWidth: 0, gap: 3 },
+  subStepText: { fontSize: 13.5, fontWeight: '700', color: THEME.text },
+  subStepTextDone: { color: THEME.success },
+  subDateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  subDateText: { fontSize: 11.5, fontWeight: '600', color: THEME.textSecondary },
+  subDoneChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#FFF', borderRadius: 999,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderWidth: 1, borderColor: 'rgba(25,135,84,0.25)',
+  },
+  subDoneChipText: { fontSize: 10, fontWeight: '800', color: THEME.success },
+  confirmOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28,
+  },
+  confirmCard: {
+    width: '100%', maxWidth: 320, backgroundColor: '#FFF', borderRadius: 18,
+    padding: 22, alignItems: 'center', elevation: 10,
+  },
+  confirmIconBg: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: THEME.warningLight,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+  },
+  confirmTitle: { fontSize: 16, fontWeight: '800', color: THEME.text, marginBottom: 8, textAlign: 'center' },
+  confirmMessage: { fontSize: 12.5, color: THEME.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 20 },
+  confirmActionsRow: { flexDirection: 'row', gap: 10, width: '100%' },
+  confirmCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 10,
+    borderWidth: 1, borderColor: THEME.border, alignItems: 'center',
+  },
+  confirmCancelText: { fontWeight: '700', color: THEME.textSecondary, fontSize: 13 },
+  confirmSkipBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 10,
+    backgroundColor: THEME.warning, alignItems: 'center',
+  },
+  confirmSkipText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
   skippedBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: THEME.warningLight, borderRadius: 8,
@@ -955,4 +1438,13 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primary, alignItems: 'center', justifyContent: 'center',
   },
   saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+
+  // ---- Update History modal ----
+  historyModalCard: { maxWidth: 400 },
+  historyRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F0F1F3' },
+  historyRowHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 2 },
+  historyStep: { flex: 1, fontSize: 13, fontWeight: '700', color: THEME.text },
+  historyWhen: { fontSize: 10.5, color: THEME.muted, flexShrink: 0 },
+  historyBy: { fontSize: 11.5, color: THEME.textSecondary, marginBottom: 4 },
+  historyChangeLine: { fontSize: 12, color: THEME.text, paddingVertical: 1, lineHeight: 17 },
 });

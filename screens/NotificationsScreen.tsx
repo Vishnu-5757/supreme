@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Modal,
   Linking,
   Pressable,
+  TextInput,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,8 @@ import { SkeletonNotifCard } from '../components/Skeleton';
 
 const PRIMARY = '#8E1C1C';
 const MUTED = '#94A3B8';
+
+type Filter = 'all' | 'unread' | 'read';
 
 type NotificationItem = {
   id: number;
@@ -119,6 +122,30 @@ export default function NotificationsScreen({ navigation, route }: any) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<NotificationItem | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
+
+  // Search covers the customer / project name, phone number (digits-only match
+  // too, so spaces or +91 formatting don't matter), and the milestone or
+  // checklist wording, which lives in the title and body text.
+  const searched = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return notifications;
+    const qDigits = q.replace(/\D/g, '');
+    return notifications.filter(n => {
+      const text = `${n.title} ${n.body} ${n.customerName ?? ''} ${n.mobile ?? ''}`.toLowerCase();
+      if (text.includes(q)) return true;
+      return qDigits.length > 0 && (n.mobile ?? '').replace(/\D/g, '').includes(qDigits);
+    });
+  }, [notifications, query]);
+
+  const visible = useMemo(
+    () => searched.filter(n => (filter === 'unread' ? !n.read : filter === 'read' ? n.read : true)),
+    [searched, filter],
+  );
+  const countAll = searched.length;
+  const countUnread = searched.filter(n => !n.read).length;
+  const countRead = countAll - countUnread;
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
@@ -195,11 +222,8 @@ export default function NotificationsScreen({ navigation, route }: any) {
             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
           </TouchableOpacity>
           <View style={styles.topBarCenter}>
-            <View style={styles.topIconCircle}>
-              <MaterialCommunityIcons name="bell-outline" size={22} color={PRIMARY} />
-            </View>
-            <Text style={styles.topTitle}>Notifications</Text>
-            <Text style={styles.topSub}>{unreadCount} unread · {notifications.length} total</Text>
+            <Text style={styles.topTitle} numberOfLines={1}>Notifications</Text>
+            <Text style={styles.topSub} numberOfLines={1}>{unreadCount} unread · {notifications.length} total</Text>
           </View>
           <View style={{ width: 34 }} />
         </View>
@@ -209,9 +233,54 @@ export default function NotificationsScreen({ navigation, route }: any) {
             {[1, 2, 3, 4, 5].map(i => <SkeletonNotifCard key={i} />)}
           </View>
         ) : (
+          <View style={styles.body}>
+            <View style={styles.controls}>
+              <View style={styles.searchBox}>
+                <MaterialCommunityIcons name="magnify" size={18} color={MUTED} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search name, phone or milestone"
+                  placeholderTextColor={MUTED}
+                  returnKeyType="search"
+                  autoCorrect={false}
+                />
+                {query.length > 0 && (
+                  <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <MaterialCommunityIcons name="close-circle" size={16} color={MUTED} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.tabs}>
+                {([
+                  ['all', 'All', countAll],
+                  ['unread', 'Unread', countUnread],
+                  ['read', 'Read', countRead],
+                ] as [Filter, string, number][]).map(([key, label, count]) => {
+                  const active = filter === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.tab, active && styles.tabActive]}
+                      onPress={() => setFilter(key)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
+                      <View style={[styles.tabCount, active && styles.tabCountActive]}>
+                        <Text style={[styles.tabCountText, active && styles.tabCountTextActive]}>{count}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
           <FlatList
             style={styles.list}
-            data={notifications}
+            keyboardShouldPersistTaps="handled"
+            data={visible}
             keyExtractor={item => `${item.source}-${item.id}`}
             contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 28 }]}
             ItemSeparatorComponent={() => <View style={styles.sep} />}
@@ -247,6 +316,11 @@ export default function NotificationsScreen({ navigation, route }: any) {
                   </View>
 
                   <Text style={styles.cardBody} numberOfLines={2}>{item.body}</Text>
+                  {(!!item.customerName || !!item.mobile) && (
+                    <Text style={styles.cardMeta} numberOfLines={1}>
+                      {[item.customerName, item.mobile].filter(Boolean).join('  ·  ')}
+                    </Text>
+                  )}
                 </View>
                 <Text style={styles.time}>{item.time}</Text>
               </TouchableOpacity>
@@ -254,11 +328,16 @@ export default function NotificationsScreen({ navigation, route }: any) {
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <MaterialCommunityIcons name="bell-off-outline" size={46} color={MUTED} />
-                <Text style={styles.emptyTitle}>No notifications</Text>
-                <Text style={styles.emptySub}>You're all caught up.</Text>
+                <Text style={styles.emptyTitle}>
+                  {query.trim() ? 'No matches' : filter === 'unread' ? 'Nothing unread' : filter === 'read' ? 'Nothing read yet' : 'No notifications'}
+                </Text>
+                <Text style={styles.emptySub}>
+                  {query.trim() ? 'Try a different name, phone number or milestone.' : "You're all caught up."}
+                </Text>
               </View>
             }
           />
+          </View>
         )}
       </SafeAreaView>
 
@@ -267,6 +346,9 @@ export default function NotificationsScreen({ navigation, route }: any) {
         visible={!!selectedItem}
         animationType="fade"
         transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setSelectedItem(null)}
       >
         <View style={styles.modalOverlay}>
@@ -364,17 +446,30 @@ const styles = StyleSheet.create({
   topBar: {
     backgroundColor: PRIMARY,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18,
   },
   backBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+  topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
   topIconCircle:{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   topTitle:     { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
   topSub:       { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
 
-  skeletonWrap: { flex: 1, backgroundColor: '#F5F6F8', marginTop: -24, paddingTop: 29, paddingHorizontal: 14, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
-  list:         { flex: 1, marginTop: -24, backgroundColor: '#F5F6F8', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
-  listContent:  { paddingTop: 29, paddingHorizontal: 14, paddingBottom: 28, flexGrow: 1 },
+  skeletonWrap: { flex: 1, backgroundColor: '#F5F6F8', paddingTop: 16, paddingHorizontal: 14, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
+  body:         { flex: 1, backgroundColor: '#F5F6F8', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
+  controls:     { paddingTop: 29, paddingHorizontal: 14, paddingBottom: 6, gap: 10 },
+  searchBox:    { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, height: 44 },
+  searchInput:  { flex: 1, fontSize: 13.5, fontWeight: '600', color: '#0F172A', paddingVertical: 0 },
+  tabs:         { flexDirection: 'row', backgroundColor: '#E9EDF2', borderRadius: 14, padding: 3 },
+  tab:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 11 },
+  tabActive:    { backgroundColor: '#FFF', elevation: 1, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  tabText:      { fontSize: 12.5, fontWeight: '700', color: '#64748B' },
+  tabTextActive:{ color: PRIMARY },
+  tabCount:     { minWidth: 20, paddingHorizontal: 6, height: 18, borderRadius: 9, backgroundColor: 'rgba(100,116,139,0.15)', alignItems: 'center', justifyContent: 'center' },
+  tabCountActive:{ backgroundColor: 'rgba(142,28,28,0.12)' },
+  tabCountText: { fontSize: 10.5, fontWeight: '800', color: '#64748B' },
+  tabCountTextActive:{ color: PRIMARY },
+  list:         { flex: 1 },
+  listContent:  { paddingTop: 10, paddingHorizontal: 14, paddingBottom: 28, flexGrow: 1 },
   sep: { height: 10 },
 
   card: {
@@ -402,6 +497,7 @@ const styles = StyleSheet.create({
   cardTitle:     { fontSize: 14, fontWeight: '800', color: '#0F172A', flexShrink: 1 },
   cardTitleRead: { fontWeight: '600', color: '#475569' },
   cardBody: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 3 },
+  cardMeta: { fontSize: 11, fontWeight: '700', color: '#0369A1', marginTop: 4 },
   time:     { fontSize: 11, fontWeight: '700', color: '#94A3B8', maxWidth: 72, textAlign: 'right' },
 
   staleBadge: {

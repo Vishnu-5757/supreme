@@ -949,18 +949,15 @@ export default function AddEditProjectScreen({ navigation, route }: Props) {
                             <MaterialCommunityIcons name="arrow-left" size={20} color="#FFF" />
                         </TouchableOpacity>
                         <View style={styles.topBarCenter}>
-                            <View style={styles.topAvatar}>
-                                <Text style={styles.topAvatarText}>{avatarLetter}</Text>
-                            </View>
-                            <Text style={styles.topTitle}>{isEdit ? 'Edit Project' : 'New Project'}</Text>
-                            <Text style={styles.topSub}>
+                            <Text style={styles.topTitle} numberOfLines={1}>{isEdit ? 'Edit Project' : 'New Project'}</Text>
+                            <Text style={styles.topSub} numberOfLines={1}>
                                 {isEdit ? `Editing: ${existingProject?.customer_name || ''}` : 'Fill in the details below'}
                             </Text>
                         </View>
                         <View style={{ width: 34 }} />
                     </View>
 
-                    <KeyboardAvoidingView style={[styles.keyboardWrap, { backgroundColor: THEME.bg, marginTop: -24 ,paddingTop: 29}]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <KeyboardAvoidingView style={[styles.keyboardWrap, { backgroundColor: THEME.bg, paddingTop: 16 }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
                         <NativeViewGestureHandler disallowInterruption={true}>
                             <ScrollView
@@ -1214,14 +1211,14 @@ const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: 'transparent' },
     centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
     loaderText: { fontSize: 14, color: THEME.muted, marginTop: 12 },
-    topBar: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 34 },
+    topBar: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 },
     backBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-    topBarCenter: { flex: 1, alignItems: 'center', gap: 4 },
+    topBarCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 10 },
     topAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6 },
     topAvatarText: { fontSize: 20, fontWeight: '800', color: THEME.primary },
     topTitle: { fontSize: 17, fontWeight: '800', color: '#FFF', marginTop: 2 },
     topSub: { fontSize: 11, color: 'rgba(255,255,255,0.65)' },
-    keyboardWrap: { flex: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+    keyboardWrap: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
     scroll: { flex: 1 },
     scrollContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 30 ,marginTop:10},
     card: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: THEME.border, padding: 14, marginBottom: 14, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 },

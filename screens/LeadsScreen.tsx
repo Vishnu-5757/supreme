@@ -211,6 +211,35 @@ const LeadDeleteConfirmModal = ({ visible, itemName, onCancel, onConfirm, loadin
   </Modal>
 );
 
+// ── Convert-to-Project Confirmation Modal ──────────────────────────
+const ConvertConfirmModal = ({ visible, itemName, onCancel, onConfirm }: {
+  visible: boolean; itemName: string; onCancel: () => void; onConfirm: () => void;
+}) => (
+  <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
+    <View style={ldStyles.root}>
+      <View style={ldStyles.box}>
+        <View style={[ldStyles.iconWrap, { backgroundColor: THEME.successLight }]}>
+          <MaterialCommunityIcons name="swap-horizontal-bold" size={28} color={THEME.success} />
+        </View>
+        <Text style={ldStyles.title}>Convert to Project?</Text>
+        <Text style={ldStyles.sub}>
+          This opens a pre-filled project form for{' '}
+          <Text style={{ fontWeight: '700', color: THEME.text }}>"{itemName}"</Text>.
+          The lead is only marked converted once you save it.
+        </Text>
+        <View style={ldStyles.btns}>
+          <TouchableOpacity style={ldStyles.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+            <Text style={ldStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[ldStyles.confirmBtn, { backgroundColor: THEME.success }]} onPress={onConfirm} activeOpacity={0.8}>
+            <Text style={ldStyles.confirmText}>Yes, Convert</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
 const ldStyles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 32 },
   box: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, alignItems: 'center', width: '100%', elevation: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 4 } },
@@ -662,6 +691,7 @@ export default function LeadsScreen({ navigation, route }: any) {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [convertTarget, setConvertTarget] = useState<any>(null);
   const [deleteFeedback, setDeleteFeedback] = useState({ visible: false, type: 'success' as 'success' | 'error', title: '', message: '' });
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
@@ -670,6 +700,10 @@ export default function LeadsScreen({ navigation, route }: any) {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  // From the API now — real totals across the whole scoped lead list, not a
+  // count of whatever happens to be on the currently loaded page.
+  const [hotCount, setHotCount] = useState(0);
+  const [assignedToMeCount, setAssignedToMeCount] = useState(0);
 
   const [qualityOptions, setQualityOptions] = useState<any[]>([]);
   const [statusOptions, setStatusOptions] = useState<any[]>([]);
@@ -686,6 +720,7 @@ export default function LeadsScreen({ navigation, route }: any) {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fabAnim = useRef(new Animated.Value(1)).current;
   const lastScrollY = useRef(0);
+  const fabHidden = useRef(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ visible: true, message, type });
@@ -726,13 +761,13 @@ export default function LeadsScreen({ navigation, route }: any) {
   }, []);
 
   const fetchLeads = useCallback(
-    async (page: number, shouldAppend: boolean, search: string, quality: string[], status: string[], assignedToMe: boolean = false) => {
+    async (page: number, shouldAppend: boolean, search: string, quality: string[], status: string[], assignedToMe: boolean = false, silent: boolean = false) => {
       if (isFetching.current) return;
       isFetching.current = true;
 
-      if (!shouldAppend) {
+      if (!shouldAppend && !silent) {
         setLoading(true);
-      } else {
+      } else if (shouldAppend) {
         setLoadingMore(true);
       }
 
@@ -757,6 +792,8 @@ export default function LeadsScreen({ navigation, route }: any) {
         }
 
         setTotalCount(data.count || 0);
+        setHotCount(data.hot_count || 0);
+        setAssignedToMeCount(data.assigned_to_me_count || 0);
         setHasNextPage(!!data.next);
         setCurrentPage(page);
       } catch (err: any) {
@@ -786,7 +823,9 @@ export default function LeadsScreen({ navigation, route }: any) {
       if (!mountFetchDone.current) {
         mountFetchDone.current = true;
       } else {
-        fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
+        // Silent — refreshes in the background on tab refocus, without
+        // flashing the full loading skeleton over data that's already shown.
+        fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter, true);
       }
 
       refreshBadgeFromServer();
@@ -879,11 +918,17 @@ export default function LeadsScreen({ navigation, route }: any) {
     const dy = y - lastScrollY.current;
     lastScrollY.current = y;
     if (dy > 8 && y > 60) {
-      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+      if (!fabHidden.current) {
+        fabHidden.current = true;
+        Animated.timing(fabAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+      }
     } else if (dy < -8) {
-      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      if (fabHidden.current) {
+        fabHidden.current = false;
+        Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+      }
     }
-  }, []);
+  }, [fabAnim]);
 
   const navigateToAddLead = () => {
     navigation.navigate('AddEditLead', {
@@ -891,25 +936,32 @@ export default function LeadsScreen({ navigation, route }: any) {
     });
   };
 
-  // ── Convert handler – navigates to AddEditProject with lead data ──
+  // ── Convert handler – asks for confirmation first, then navigates to
+  // AddEditProject with the lead's data ──
   const handleConvert = (lead: any) => {
     if (lead.is_converted) {
       showToast('Lead already converted', 'info');
       return;
     }
+    setConvertTarget(lead);
+  };
+
+  const confirmConvert = () => {
+    const lead = convertTarget;
+    setConvertTarget(null);
+    if (!lead) return;
     setShowDetailModal(false);
     navigation.navigate('AddEditProject', {
       lead: lead,
+      // AddEditProjectScreen already shows its own "Project Created!" success
+      // modal on save — just refresh the leads list here to pick up the new
+      // is_converted status, without a second, redundant toast on top of it.
       onSuccess: () => {
-        // After project is created, refresh the leads list to pick up is_converted status
         fetchLeads(1, false, searchQuery, qualityFilter, statusFilter, assignedToMeFilter);
-        showToast('Project created from lead!', 'success');
       },
     });
   };
 
-  const hotLeads = leads.filter(l => l.quality_fk?.name?.toLowerCase().includes('hot')).length;
-  const assignedLeads = leads.filter(l => l.assigned_to).length;
   const getFilterCount = () => qualityFilter.length + statusFilter.length + (assignedToMeFilter ? 1 : 0);
 
   const renderFooter = () => {
@@ -982,6 +1034,12 @@ export default function LeadsScreen({ navigation, route }: any) {
           onCancel={() => setDeleteTarget(null)}
           onConfirm={confirmDelete}
         />
+        <ConvertConfirmModal
+          visible={!!convertTarget}
+          itemName={convertTarget?.customer_name || ''}
+          onCancel={() => setConvertTarget(null)}
+          onConfirm={confirmConvert}
+        />
         <LeadFeedbackModal
           visible={deleteFeedback.visible}
           type={deleteFeedback.type}
@@ -997,7 +1055,7 @@ export default function LeadsScreen({ navigation, route }: any) {
               <View style={styles.headerLeft}>
                 <Text style={styles.headerTitle}>Leads</Text>
                 <Text style={styles.headerSubtitle}>
-                  {totalCount} total • {hotLeads} hot • {assignedLeads} assigned
+                  {totalCount} total • {hotCount} hot • {assignedToMeCount} assigned
                 </Text>
               </View>
               <View style={styles.headerActions}>
@@ -1015,6 +1073,10 @@ export default function LeadsScreen({ navigation, route }: any) {
                 <AccountMenu navigation={navigation} />
               </View>
             </View>
+          </View>
+
+          <View style={styles.bodyWrap}>
+          <View style={styles.searchBarOuter}>
             <View style={styles.searchBar}>
               <MaterialCommunityIcons name="magnify" size={16} color={THEME.muted} />
               <TextInput
@@ -1032,8 +1094,6 @@ export default function LeadsScreen({ navigation, route }: any) {
               )}
             </View>
           </View>
-
-          <View style={styles.bodyWrap}>
           <View style={styles.filterStrip}>
             <TouchableOpacity
               style={[styles.filtersButton, getFilterCount() > 0 && styles.filterPillActive]}
@@ -1205,9 +1265,8 @@ const styles = StyleSheet.create({
   bodyWrap: {
     flex: 1,
     backgroundColor: THEME.bg,
-    marginTop: -16,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
   },
   centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
@@ -1215,8 +1274,8 @@ const styles = StyleSheet.create({
   headerWrap: {
     backgroundColor: THEME.primary,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 26,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1239,10 +1298,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3, borderWidth: 1.5, borderColor: THEME.primary,
   },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', lineHeight: 10 },
+  searchBarOuter: { paddingHorizontal: 14, paddingTop: 14 },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FFF', borderRadius: 10,
-    paddingHorizontal: 12, height: 38, marginTop: 12,
+    paddingHorizontal: 12, height: 38,
+    borderWidth: 1, borderColor: THEME.border,
   },
   searchInput: { flex: 1, fontSize: 13, color: THEME.text, paddingVertical: 0 },
   filterStrip: {
@@ -1313,11 +1374,11 @@ const styles = StyleSheet.create({
   dotSep: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: THEME.mutedLight, flexShrink: 0 },
   chipRow: { flexDirection: 'row', flexWrap: 'nowrap', gap: 5, marginTop: 8, alignItems: 'center' },
   qualityChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 9, paddingVertical: 5,
-    borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 6,
   },
-  qualityChipText: { fontSize: 12, fontWeight: '800' },
+  qualityChipText: { fontSize: 10, fontWeight: '800' },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 7, paddingVertical: 3,
@@ -1424,11 +1485,11 @@ const styles = StyleSheet.create({
   sheetMobile: { fontSize: 13, color: THEME.muted, marginBottom: 8 },
   sheetBadgeRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
   qualityBadgeLarge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 20,
   },
-  qualityBadgeLargeText: { fontSize: 13, fontWeight: '800' },
+  qualityBadgeLargeText: { fontSize: 11, fontWeight: '800' },
   sheetBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,

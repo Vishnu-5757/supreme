@@ -17,11 +17,13 @@ export default function EditUserScreen({ navigation, route }: any) {
     email: user.email || '',
     username: user.username || '',
     is_active: !!user.is_active,
-    is_staff: !!user.is_staff,
-    is_head: !!user.profile?.is_head,
     is_technician: !!user.profile?.is_technician,
+    is_head_lead: !!user.profile?.is_head_lead,
+    is_head_project: !!user.profile?.is_head_project,
+    is_head_service: !!user.profile?.is_head_service,
     app_permissions: Array.isArray(user.app_permissions) ? user.app_permissions : [],
     milestone_perms: Array.isArray(user.milestone_perms) ? user.milestone_perms : [],
+    sub_milestone_perms: Array.isArray(user.sub_milestone_perms) ? user.sub_milestone_perms : [],
   };
 
   const handleSubmit = async (formData: any) => {
@@ -34,11 +36,13 @@ export default function EditUserScreen({ navigation, route }: any) {
         email: formData.email.trim(),
         username: formData.username.trim(),
         is_active: formData.is_active,
-        is_staff: formData.is_staff,
-        is_head: formData.is_head,
         is_technician: formData.is_technician,
+        is_head_lead: formData.is_head_lead,
+        is_head_project: formData.is_head_project,
+        is_head_service: formData.is_head_service,
         app_permissions: formData.app_permissions,
         milestone_perms: formData.milestone_perms,
+        sub_milestone_perms: formData.sub_milestone_perms,
       };
 
       if (formData.password && formData.password.trim()) {

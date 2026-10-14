@@ -232,7 +232,14 @@ export const BottomNavBar = ({ state, navigation }: any) => {
   const glassScaleX = useRef(new Animated.Value(1)).current;
   const glassScaleY = useRef(new Animated.Value(1)).current;
 
-  const visibleTabs = ALL_TABS;
+  // The last slot is "Users" for a superuser (unchanged), and "Progress" —
+  // always reachable, never locked — for everyone else, since My Progress
+  // has no permission gate of its own (it just shows whatever modules the
+  // viewer already has).
+  const visibleTabs = ALL_TABS.map(tab => {
+    if (tab.screen !== 'Users' || isSuperuser) return tab;
+    return { ...tab, icon: 'chart-donut', label: 'Progress', module: 'progress' };
+  });
 
   const currentRouteName =
     state?.routes?.[state?.index]?.name ?? visibleTabs[0].screen;
@@ -402,7 +409,7 @@ export const BottomNavBar = ({ state, navigation }: any) => {
               routeIndex >= 0 && state.index === routeIndex;
 
             const hasAccess =
-              isSuperuser || canAccess(tab.module);
+              tab.module === 'progress' ? true : isSuperuser || canAccess(tab.module);
 
             const handlePress = () => {
               if (routeIndex < 0) {

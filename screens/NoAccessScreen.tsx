@@ -107,8 +107,8 @@ const s = StyleSheet.create({
   headerWrap: {
     backgroundColor: PRIMARY,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
   headerTopRow: {
     flexDirection: 'row',
